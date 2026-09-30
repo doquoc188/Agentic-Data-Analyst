@@ -1,8 +1,14 @@
 """Standalone tools for the project."""
 
+import re
+
+import psycopg
 from langchain.tools import tool
 
 from app.database import get_connection
+
+MAX_ROWS = 100
+STATEMENT_TIMEOUT_MS = 5000
 
 
 @tool("calculator")
@@ -138,3 +144,83 @@ def describe_table(table_name: str) -> str:
     else:
         lines.append("- None")
     return "\n".join(lines)
+
+
+def _query_validation_error(query: str) -> str | None:
+    sql = query.strip()
+    if not sql:
+        return "Query rejected: SQL query is empty."
+
+    if sql.endswith(";"):
+        sql = sql[:-1].rstrip()
+    if not sql:
+        return "Query rejected: SQL query is empty."
+    if ";" in sql:
+        return "Query rejected: only one SQL statement is allowed."
+
+    first_word = sql.split(maxsplit=1)[0].upper()
+    if first_word not in {"SELECT", "WITH"}:
+        return "Query rejected: only SELECT or WITH queries are allowed."
+
+    blocked = (
+        r"\b(?:INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE|GRANT|"
+        r"REVOKE|COPY|CALL|DO|MERGE|INTO)\b"
+    )
+    if re.search(blocked, sql, re.IGNORECASE):
+        return "Query rejected: write and DDL operations are not allowed."
+    return None
+
+
+@tool("execute_sql")
+def execute_sql(query: str) -> str:
+    """Run one read-only SELECT or WITH query and return at most 100 result rows."""
+    validation_error = _query_validation_error(query)
+    if validation_error:
+        return validation_error
+
+    try:
+        with get_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SET TRANSACTION READ ONLY")
+                cursor.execute(
+                    "SELECT set_config('statement_timeout', %s, true)",
+                    (str(STATEMENT_TIMEOUT_MS),),
+                )
+                cursor.execute(query)
+                if cursor.description is None:
+                    return "SQL execution error: query returned no columns."
+                columns = [column.name for column in cursor.description]
+                if not columns:
+                    return "SQL execution error: query returned no columns."
+                rows = cursor.fetchmany(MAX_ROWS + 1)
+    except psycopg.Error as exc:
+        errors = {
+            "42601": "invalid SQL syntax",
+            "42P01": "table does not exist",
+            "42703": "column does not exist",
+            "57014": "query timed out or was cancelled",
+        }
+        detail = errors.get(exc.sqlstate, "PostgreSQL rejected the query")
+        return f"SQL execution error: {detail}."
+
+    truncated = len(rows) > MAX_ROWS
+    rows = rows[:MAX_ROWS]
+    row_lines = []
+    for row in rows:
+        values = ["NULL" if value is None else str(value).replace("\n", " ") for value in row]
+        row_lines.append(" | ".join(values))
+    if not row_lines:
+        row_lines = ["(no rows)"]
+
+    result = [
+        "COLUMNS:",
+        " | ".join(columns),
+        "",
+        "ROWS:",
+        *row_lines,
+        "",
+        f"Rows returned: {len(rows)}",
+    ]
+    if truncated:
+        result.append(f"Result truncated to {MAX_ROWS} rows.")
+    return "\n".join(result)

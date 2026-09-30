@@ -1,8 +1,9 @@
 """Tests for the standalone tools."""
 
 import unittest
+from unittest.mock import patch
 
-from app.tools import calculator, describe_table, get_schema
+from app.tools import MAX_ROWS, calculator, describe_table, execute_sql, get_schema
 
 
 class CalculatorTests(unittest.TestCase):
@@ -44,6 +45,73 @@ class DescribeTableTests(unittest.TestCase):
             description,
             "Table 'does_not_exist' was not found in the public schema.",
         )
+
+
+class ExecuteSqlTests(unittest.TestCase):
+    def test_select_count(self):
+        result = execute_sql.invoke({"query": "SELECT COUNT(*) AS total_rows FROM sales;"})
+        self.assertIn("total_rows", result)
+        self.assertIn("\n300\n", result)
+
+    def test_grouped_query(self):
+        result = execute_sql.invoke({
+            "query": "SELECT category, COUNT(*) AS count FROM sales "
+                     "GROUP BY category ORDER BY count DESC;"
+        })
+        self.assertIn("category | count", result)
+        self.assertIn("Rows returned:", result)
+
+    def test_cte(self):
+        result = execute_sql.invoke({
+            "query": "WITH completed AS (SELECT * FROM sales WHERE status = 'Completed') "
+                     "SELECT COUNT(*) AS completed_count FROM completed;"
+        })
+        self.assertIn("completed_count", result)
+        self.assertIn("Rows returned: 1", result)
+
+    def test_empty_query(self):
+        result = execute_sql.invoke({"query": "   "})
+        self.assertIn("SQL query is empty", result)
+
+    def test_unsafe_queries_are_rejected_before_connection(self):
+        with patch("app.tools.get_connection") as connect:
+            for query in (
+                "DELETE FROM sales;",
+                "DROP TABLE sales;",
+                "SELECT 1; DELETE FROM sales;",
+                "WITH changed AS (DELETE FROM sales RETURNING *) SELECT * FROM changed;",
+            ):
+                self.assertIn("Query rejected:", execute_sql.invoke({"query": query}))
+            connect.assert_not_called()
+
+        result = execute_sql.invoke({"query": "SELECT COUNT(*) FROM sales;"})
+        self.assertIn("\n300\n", result)
+
+    def test_missing_column(self):
+        result = execute_sql.invoke({"query": "SELECT does_not_exist FROM sales;"})
+        self.assertEqual(result, "SQL execution error: column does not exist.")
+
+    def test_truncated_result(self):
+        result = execute_sql.invoke({"query": "SELECT * FROM sales ORDER BY order_id;"})
+        row_section = result.split("ROWS:\n", 1)[1].split("\n\nRows returned:", 1)[0]
+        self.assertEqual(len(row_section.splitlines()), MAX_ROWS)
+        self.assertIn(f"Result truncated to {MAX_ROWS} rows.", result)
+
+    def test_zero_rows(self):
+        result = execute_sql.invoke({"query": "SELECT order_id FROM sales WHERE 1 = 0;"})
+        self.assertIn("(no rows)", result)
+        self.assertIn("Rows returned: 0", result)
+
+    def test_transaction_is_read_only(self):
+        result = execute_sql.invoke({
+            "query": "SELECT current_setting('transaction_read_only') AS read_only;"
+        })
+        self.assertIn("read_only", result)
+        self.assertIn("\non\n", result)
+
+    def test_invalid_syntax(self):
+        result = execute_sql.invoke({"query": "SELECT * FORM sales;"})
+        self.assertEqual(result, "SQL execution error: invalid SQL syntax.")
 
 
 if __name__ == "__main__":
