@@ -1,7 +1,7 @@
 """Tests for the standalone tools."""
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from app.tools import MAX_ROWS, calculator, describe_table, execute_sql, get_schema
 
@@ -36,8 +36,53 @@ class DescribeTableTests(unittest.TestCase):
         self.assertIn("TABLE: sales", description)
         self.assertIn("COLUMNS:", description)
         self.assertIn("- order_id: integer", description)
-        self.assertIn("PRIMARY KEY:", description)
+        self.assertIn("PRIMARY KEY:\n- order_id\n", description)
         self.assertIn("FOREIGN KEYS:", description)
+
+    def test_orders_primary_and_foreign_key(self):
+        description = describe_table.invoke({"table_name": "orders"})
+        self.assertIn("PRIMARY KEY:\n- order_id\n", description)
+        self.assertIn(
+            "FOREIGN KEY (customer_id) REFERENCES customers(customer_id)",
+            description,
+        )
+
+    def test_order_items_primary_and_foreign_keys(self):
+        description = describe_table.invoke({"table_name": "order_items"})
+        self.assertIn("PRIMARY KEY:\n- order_item_id\n", description)
+        self.assertIn(
+            "FOREIGN KEY (order_id) REFERENCES orders(order_id)", description
+        )
+        self.assertIn(
+            "FOREIGN KEY (product_id) REFERENCES products(product_id)",
+            description,
+        )
+
+    def test_customers_and_products_primary_keys(self):
+        for table_name, key_column in (
+            ("customers", "customer_id"),
+            ("products", "product_id"),
+        ):
+            with self.subTest(table_name=table_name):
+                description = describe_table.invoke({"table_name": table_name})
+                self.assertIn(f"PRIMARY KEY:\n- {key_column}\n", description)
+
+    def test_composite_primary_key_keeps_database_column_order(self):
+        cursor = MagicMock()
+        cursor.fetchone.return_value = (1,)
+        cursor.fetchall.side_effect = [
+            [("first_part", "integer", "NO", None),
+             ("second_part", "integer", "NO", None)],
+            [("second_part",), ("first_part",)],
+            [],
+        ]
+        connection = MagicMock()
+        connection.__enter__.return_value.cursor.return_value.__enter__.return_value = cursor
+
+        with patch("app.tools.get_connection", return_value=connection):
+            description = describe_table.invoke({"table_name": "example"})
+
+        self.assertIn("PRIMARY KEY:\n- second_part\n- first_part\n", description)
 
     def test_missing_table(self):
         description = describe_table.invoke({"table_name": "does_not_exist"})

@@ -90,18 +90,19 @@ def describe_table(table_name: str) -> str:
 
             cursor.execute(
                 """
-                SELECT kcu.column_name
-                FROM information_schema.table_constraints AS tc
-                JOIN information_schema.key_column_usage AS kcu
-                  ON tc.constraint_catalog = kcu.constraint_catalog
-                 AND tc.constraint_schema = kcu.constraint_schema
-                 AND tc.constraint_name = kcu.constraint_name
-                 AND tc.table_schema = kcu.table_schema
-                 AND tc.table_name = kcu.table_name
-                WHERE tc.table_schema = 'public'
-                  AND tc.table_name = %s
-                  AND tc.constraint_type = 'PRIMARY KEY'
-                ORDER BY kcu.ordinal_position;
+                SELECT attribute.attname
+                FROM pg_catalog.pg_constraint AS con
+                JOIN pg_catalog.pg_class AS rel ON rel.oid = con.conrelid
+                JOIN pg_catalog.pg_namespace AS ns ON ns.oid = rel.relnamespace
+                CROSS JOIN LATERAL unnest(con.conkey) WITH ORDINALITY
+                    AS pk_column(attnum, position)
+                JOIN pg_catalog.pg_attribute AS attribute
+                  ON attribute.attrelid = rel.oid
+                 AND attribute.attnum = pk_column.attnum
+                WHERE ns.nspname = 'public'
+                  AND rel.relname = %s
+                  AND con.contype = 'p'
+                ORDER BY pk_column.position;
                 """,
                 (table_name,),
             )
