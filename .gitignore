@@ -6,4 +6,17 @@ __pycache__/
 eval/results/*.json
 eval/generalization/results/*.json
 runs/
-.vscode/
+
+# Frontend builds, dependencies, local configuration, and portable build tools
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+frontend/coverage/
+.tools/
+
+# Local migration archives and reports; never commit database exports.
+.deployment-tmp/
+*.dump
+*.backup

@@ -6,6 +6,7 @@ import time
 from langchain.messages import HumanMessage, SystemMessage, ToolMessage
 from pydantic import ValidationError
 
+from app.database import DatabaseUnavailableError, database_context
 from app.llm import get_llm
 from app.trace import AgentTrace, ToolCallRecord, elapsed_ms, safe_trace_value, utc_now
 from app.tools import calculator, describe_table, execute_sql, get_schema
@@ -123,14 +124,20 @@ def run_agent(
     *,
     trace: AgentTrace | None = None,
     verbose: bool = True,
+    database_name: str | None = None,
+    database_url: str | None = None,
 ) -> str:
     """Observe one manual run and persist its trace even when the run fails."""
     trace = trace if trace is not None else AgentTrace()
     trace.begin(question)
     try:
-        answer = _run_agent(question, max_iterations, trace=trace, verbose=verbose)
+        with database_context(database_name, database_url=database_url):
+            answer = _run_agent(question, max_iterations, trace=trace, verbose=verbose)
         trace.finish("success", "success")
         return answer
+    except DatabaseUnavailableError:
+        trace.finish("database_error", "database_unavailable")
+        raise
     except ModelIntegrationError:
         trace.finish("model_error", "model_integration_error")
         raise
@@ -242,6 +249,10 @@ def _run_agent(
                     event.error_message = "Tool invocation failed; check the recorded argument fields."
                     event.finished_at = utc_now()
                     event.duration_ms = elapsed_ms(tool_started)
+                    if isinstance(exc, DatabaseUnavailableError):
+                        event.error_category = "database_unavailable"
+                        event.error_message = "The database is unavailable."
+                        raise DatabaseUnavailableError(event.error_message) from None
                     raise ToolInvocationError(
                         f"Tool invocation failed ({event.error_type})."
                     ) from None

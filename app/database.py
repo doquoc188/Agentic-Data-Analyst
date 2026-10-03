@@ -1,26 +1,47 @@
 """PostgreSQL connection and a small connection check."""
 
-import os
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 import psycopg
-from dotenv import load_dotenv
+
+from app.config import get_settings, load_dotenv, validate_database_url
+from app.profiles import DatabaseTarget
 
 
-def get_connection() -> psycopg.Connection:
-    """Open a PostgreSQL connection using settings from the environment."""
+# ContextVar values belong to the current thread/task, not to other requests.
+_database_target = ContextVar("database_target", default=None)
+
+
+class DatabaseUnavailableError(RuntimeError):
+    """A connection could not be opened; retain no connection error details."""
+
+
+@contextmanager
+def database_context(database_name: str | None, *, database_url: str | None = None):
+    """Select a database for one run, restoring the previous context on exit."""
+    token = _database_target.set(DatabaseTarget(database_name, database_url))
+    try:
+        yield
+    finally:
+        _database_target.reset(token)
+
+
+def get_connection(database_name: str | None = None, *, database_url: str | None = None) -> psycopg.Connection:
+    """Open the explicit/run destination, or the existing local .env database."""
     load_dotenv()
-    required = ("DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD")
-    missing = [name for name in required if not os.getenv(name)]
-    if missing:
-        raise RuntimeError(f"Missing database settings: {', '.join(missing)}")
-
-    return psycopg.connect(
-        host=os.environ["DB_HOST"],
-        port=os.environ["DB_PORT"],
-        dbname=os.environ["DB_NAME"],
-        user=os.environ["DB_USER"],
-        password=os.environ["DB_PASSWORD"],
-    )
+    target = (DatabaseTarget(database_name, database_url)
+              if database_name is not None or database_url is not None
+              else _database_target.get() or DatabaseTarget())
+    try:
+        if target.url:
+            validate_database_url(target.url)
+            # Psycopg preserves credentials and URL options such as sslmode.
+            return psycopg.connect(target.url, connect_timeout=5)
+        settings = get_settings(load_environment=False)
+        return psycopg.connect(**settings.local_connection(target.database_name), connect_timeout=5)
+    except psycopg.OperationalError:
+        raise DatabaseUnavailableError("The database is unavailable.") from None
 
 
 if __name__ == "__main__":

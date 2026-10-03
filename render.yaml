@@ -1,0 +1,21 @@
+# Backend only. Import this Blueprint manually when ready to deploy.
+services:
+  - type: web
+    name: agentic-data-analyst-api
+    runtime: python
+    plan: free
+    autoDeployTrigger: "off"
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.api:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: DATABASE_SALES_URL
+        sync: false
+      - key: DATABASE_SAAS_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: TRACE_ENABLED
+        value: "false"

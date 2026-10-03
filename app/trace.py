@@ -2,7 +2,6 @@
 
 import argparse
 import json
-import os
 import re
 import sys
 import tempfile
@@ -11,6 +10,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
+
+from app.config import ConfigurationError, get_settings, secret_values
 
 RUNS_DIR = Path(__file__).resolve().parent.parent / "runs"
 PREVIEW_ROWS = 10
@@ -41,10 +42,8 @@ def safe_trace_value(value):
     if isinstance(value, (list, tuple)):
         return [safe_trace_value(item) for item in value]
     if isinstance(value, str):
-        for name in ("DB_PASSWORD", "GOOGLE_API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY"):
-            secret = os.getenv(name)
-            if secret:
-                value = value.replace(secret, "[REDACTED]")
+        for secret in secret_values():
+            value = value.replace(secret, "[REDACTED]")
         value = re.sub(r"postgres(?:ql)?://\S+|[a-z][a-z0-9+.-]*://[^\s/]*:[^\s/]*@\S+",
                        "[REDACTED CONNECTION]", value, flags=re.I)
         value = re.sub(r"\bAuthorization\s*[:=]\s*[^\r\n]+|\bBearer\s+\S+",
@@ -108,6 +107,7 @@ class AgentTrace:
     model_error: dict | None = None
     source: str = "other"
     case_id: str | None = None
+    database_profile: str | None = None
     question: str = ""
     run_id: str = field(default_factory=lambda: str(uuid4()))
     started_at: str = field(default_factory=utc_now)
@@ -223,6 +223,7 @@ class AgentTrace:
             "schema_version": 1, "run_id": self.run_id, "started_at": self.started_at,
             "finished_at": self.finished_at, "duration_ms": self.duration_ms,
             "source": self.source, "case_id": self.case_id, "question": self.question,
+            "database_profile": self.database_profile,
             "status": self.status, "termination_reason": self.termination_reason,
             "model": self.model, "model_error": self.model_error, "turns": self.turns,
             "tool_calls": tools, "sql_calls": sql, "final_answer": self.final_answer,
@@ -233,10 +234,15 @@ class AgentTrace:
         """Atomic JSON publication; tracing failure cannot replace an agent result."""
         temporary = None
         try:
-            RUNS_DIR.mkdir(parents=True, exist_ok=True)
+            settings = get_settings(load_environment=False)
+            if not settings.trace_enabled:
+                self.trace_path = None
+                return None
+            directory = settings.trace_dir or RUNS_DIR
+            directory.mkdir(parents=True, exist_ok=True)
             stamp = datetime.fromisoformat(self.started_at).strftime("%Y%m%dT%H%M%SZ")
-            target = RUNS_DIR / f"{stamp}_{self.run_id}.json"
-            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=RUNS_DIR,
+            target = directory / f"{stamp}_{self.run_id}.json"
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=directory,
                                              prefix=".trace-", suffix=".tmp", delete=False) as handle:
                 temporary = Path(handle.name)
                 json.dump(self.document(), handle, indent=2, ensure_ascii=False, allow_nan=False)
@@ -304,9 +310,10 @@ def main() -> None:
     try:
         path = args.path
         if args.latest:
-            path = max(RUNS_DIR.glob("*.json"), key=lambda item: item.stat().st_mtime_ns)
+            directory = get_settings().trace_dir or RUNS_DIR
+            path = max(directory.glob("*.json"), key=lambda item: item.stat().st_mtime_ns)
         print(summary_text(read_trace(path)))
-    except (OSError, ValueError, KeyError):
+    except (OSError, ValueError, KeyError, ConfigurationError):
         parser.exit(1, "Trace reader: no readable supported trace was found.\n")
 
 

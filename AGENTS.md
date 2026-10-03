@@ -8,6 +8,12 @@ Keep the architecture simple so its agent mechanics remain understandable.
 User → Gemini → manual LangChain tool-calling loop → Python tools → PostgreSQL
 → tool observations → Gemini final answer.
 
+Product direction: a public synthetic-data web demo, targeting $0/month
+infrastructure within free-tier limits. The selected deployment stack is Vercel
+Hobby, Render Free Web Service, and two Neon Free PostgreSQL projects, with GitHub
+and the existing Gemini Developer API. Deployment has not been executed; keep
+the agent core cloud-provider agnostic.
+
 The loop is implemented by hand to show tool binding, calls, execution, and observations.
 Do not replace it with an agent framework unless the user requests that phase.
 
@@ -16,21 +22,36 @@ Do not replace it with an agent framework unless the user requests that phase.
 - `app/agent.py`: binds the four tools to Gemini, supplies system instructions,
   keeps the message list, dispatches every tool call, appends matching
   `ToolMessage` observations, and stops after at most eight model responses.
-  `python -m app.agent` accepts an optional question argument. Every run persists
+  `python -m app.agent` accepts an optional question argument. Runs can persist
   an `AgentTrace` with model turns and tool calls before invocation,
   with pending/success/error status and safe failure details. Model integration
   failures retain an allowlisted phase/category/turn diagnostic, without raw errors.
   Argument-schema errors become matching tool observations for model correction;
-  exceptions inside a tool still stop with a controlled failure.
+  exceptions inside a tool still stop with a controlled failure. Optional
+  `database_name`/`database_url` scope database selection to one run; CLI/eval
+  defaults remain. Connection failures become controlled database_error traces.
+- `app/api.py`: FastAPI `/health`, `/ready`, `/databases`, and stateless `/query`;
+  validated questions/profiles, configurable explicit CORS, safe HTTP failures,
+  existing agent-core reuse, and trace linkage. Readiness checks configuration
+  only, without model/database calls. Public database metadata contains no
+  connection settings.
+- `app/config.py`: small immutable environment settings, existing dotenv/process
+  precedence, native URL validation, and centralized configured-secret values.
+  `app/profiles.py` separates public sales/saas display metadata from connection
+  targets; configured hosted URLs override the corresponding local fallback.
 - `app/trace.py`: per-run trace records, UTC/monotonic timing, centralized
   redaction, bounded result previews, atomic JSON persistence under Git-ignored
   `runs/`, deterministic operation metrics, and a read-only developer trace reader.
+  TRACE_ENABLED/TRACE_DIR configure persistence; disabling it keeps agent behavior.
   It makes no extra model or database calls; persistence errors emit safe warnings.
 - `app/tools.py`: LangChain `@tool` implementations of `calculator`,
   `get_schema`, `describe_table`, and `execute_sql`.
 - `app/database.py`: reusable Psycopg 3 `get_connection()`; loads `.env` and
-  requires database settings from environment variables.
-- `app/llm.py`: loads `.env`, requires `GOOGLE_API_KEY`, and creates a
+  requires database settings from environment variables. An explicit database
+  name/URL override or scoped ContextVar selects the destination without mutating
+  os.environ; the context resets in finally. Psycopg consumes hosted URLs natively,
+  with a 5-second connection timeout and fixed safe connection-failure details.
+- `app/llm.py`: uses central settings, requires `GOOGLE_API_KEY`, and creates a
   temperature-0 `ChatGoogleGenerativeAI` model. It also has a connection check.
 - `sql/01_normalize_sales.sql`: transactional, reproducible migration from
   `sales` to four normalized tables. It creates constraints and grants SELECT.
@@ -60,6 +81,11 @@ Do not replace it with an agent framework unless the user requests that phase.
 - `sql/generalization/`: owner-run database/schema/data scripts and a read-only
   verification report for the deterministic synthetic SaaS fixture.
 - `tests/test_agent.py`: mocked Gemini/agent registry and dispatch tests.
+- `tests/test_api.py`: TestClient, fake-model and fake-connection HTTP, validation,
+  safe-failure, trace-linkage, CLI, and overlapping per-request database tests.
+- `tests/test_public_backend.py`: hosted/local resolution, hosted concurrency,
+  readiness, safe profile metadata, CORS, dependency failures, secret redaction,
+  and configured trace persistence, without live model/hosted-database calls.
 - `tests/test_tools.py`: calculator tests and live local PostgreSQL tool tests.
 - `tests/test_eval_cases.py`: dataset format, coverage, and live read-only
   PostgreSQL ground-truth validation. It does not call Gemini.
@@ -70,7 +96,19 @@ Do not replace it with an agent framework unless the user requests that phase.
   verifier safety/lifecycle, tracing, environment override, and optional SaaS DB
   checks enabled by `RUN_GENERALIZATION_DB_TESTS=1`.
 - `docs/tracing.md`: trace schema, storage, preview/security policy, and commands.
-- `requirements.txt`: LangChain, Gemini integration, python-dotenv, Psycopg 3.
+- `docs/deployment.md`: manual Neon export/restore/role checks and Render/Vercel
+  deployment order. `sql/deployment/` contains owner-run runtime-role setup and
+  separate runtime metadata/permission verification, never automatic migrations.
+- `render.yaml`: one Free Python web backend, manual deploy trigger, /health,
+  dashboard-supplied configuration, and hosted TRACE_ENABLED=false. No database
+  or disk is provisioned. `.python-version` pins locally tested Python 3.10.20.
+- `frontend/`: separate React/TypeScript/Vite/Tailwind public query page, native
+  dataset controls, examples, responsive light/dark layout, and safe result UX.
+  `src/api/client.ts` centralizes typed fetch calls and strips server trace paths;
+  `/databases` supplies dataset metadata. Only VITE_API_BASE_URL is browser config.
+  Vitest/React Testing Library tests mock fetch; package-lock.json pins packages.
+- `requirements.txt`: LangChain, Gemini integration, python-dotenv, Psycopg 3,
+  FastAPI, Uvicorn, and HTTPX for TestClient.
 
 Use the code and SQL files as the source of truth. `.env` stays local; settings
 are documented by name, never by secret values.
@@ -98,6 +136,9 @@ are documented by name, never by secret values.
   the environment, so keep the runtime configuration on this read-only role.
 - Database settings: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`,
   `DB_PASSWORD`. Gemini setup uses `GOOGLE_API_KEY`. Never record values.
+- Hosted HTTP profile settings: `DATABASE_SALES_URL`, `DATABASE_SAAS_URL`.
+  Use provisioned read-only analyst_agent credentials with required SSL options.
+  These URLs and their passwords are secret configuration, never public metadata.
 - `sales`: original denormalized source, currently 300 rows; retained for
   regression and revenue comparison. Its creation script is not in this repo.
 - `customers`: `customer_id` PK; name and city; unique `(customer_name, city)`.
@@ -117,8 +158,11 @@ before relying on these counts.
 The separate synthetic SaaS database is `agentic_analyst_saas`, also using public
 and `analyst_agent`. It contains accounts, plans, subscriptions, invoices, and
 support_tickets with PK/FK constraints and business-unit column comments. Switch
-databases with a process `DB_NAME` override, then restore it; `load_dotenv()`
-preserves process settings. Keep the primary `.env` DB_NAME unchanged.
+databases for CLI/evaluation with a process `DB_NAME` override, then restore it;
+`load_dotenv()` preserves process settings. HTTP clients choose only `sales` or
+`saas`; the service resolves each to its configured hosted URL or local fallback
+(`agentic_analyst`/`agentic_analyst_saas`) and uses per-run context, never a
+per-request environment override. Keep the primary `.env` DB_NAME unchanged.
 
 ## 5. Database Safety Invariants
 
@@ -134,10 +178,22 @@ preserves process settings. Keep the primary `.env` DB_NAME unchanged.
 10. Make schema changes reproducible in SQL files, not only in pgAdmin.
 11. Run administrative migrations separately as an authorized database owner;
     do not put admin credentials into application configuration.
-12. Keep run traces local and Git ignored. Persist at most 10 SQL row lines and
+12. Keep run traces local and Git ignored, including custom TRACE_DIR locations.
+    Persist at most 10 SQL row lines and
     4,000 preview characters per tool result; redact secrets before serialization.
     Never capture raw provider objects, exception messages, headers, environment
     dumps, or evaluator ground truth in agent traces.
+13. HTTP clients select only allowlisted database profiles. Keep request database
+    context isolated; never change process environment variables per request.
+14. Public clients cannot supply database hosts, names, URLs, credentials, or
+    arbitrary parameters. Only predefined synthetic demo datasets are exposed.
+    Never add arbitrary user database connections without a requested phase.
+15. Configure explicit browser origins via ALLOWED_ORIGINS; no wildcard or
+    credentialed CORS. CORS does not replace authentication or database permissions.
+16. Neon runtime roles must be created through SQL without admin memberships,
+    ownership, write/CREATE/TEMP privileges, or grant options. Never use a Neon
+    owner URL in Render. Run migrations manually as the owner, then verify using
+    a direct analyst_agent login. Keep migration archives/reports Git ignored.
 
 ## 6. Agent Behavior Invariants
 
@@ -221,22 +277,65 @@ preserves process settings. Keep the primary `.env` DB_NAME unchanged.
   Official baselines: original sales **22/24 (91.67%)**, unseen SaaS
   **14/16 (87.50%)**. The SaaS diagnostic found one categorical-value grounding
   miss and one separate provider RESOURCE_EXHAUSTED interruption.
-- Phase 3.7 categorical grounding implemented: generic prompt guidance for exact
+- Phase 3.7 categorical grounding complete and verified live: generic guidance for exact
   stored literals, targeted metadata/bounded value inspection, ungrounded-zero
   checks, value reuse, and valid grounded zero conclusions. Fake-model tests
   cover correction and convergence; all 129 tests passed with SaaS DB checks
   enabled. Tools, tracing, loop, eight-response limit, provider policy, and both
-  benchmark suites are unchanged. Fresh live benchmark verification is pending.
+  benchmark suites are unchanged. One fresh post-3.7 SaaS run recorded 14/16
+  (87.50%); the previous categorical miss passed with metadata/value grounding.
+- Phase 3 CLOSED: official sales baseline 22/24 (91.67%); unseen SaaS baseline
+  14/16 (87.50%). The final SaaS diagnostic found one representation false
+  negative and one response-limit failure after correct leaders were retrieved.
+  No further benchmark tuning is planned.
+- Phase 4.1 complete: small FastAPI service over the existing agent, allowed
+  sales/saas profiles, concurrent per-run database context, source="api" traces
+  with profile/run linkage, validated requests, and fixed safe error responses.
+  All 140 tests passed, including optional SaaS PostgreSQL checks. No Gemini
+  calls, benchmark reruns, or database/schema/privilege changes during this phase.
+- Phase 4.2 complete: cloud-provider agnostic public-backend foundation, central
+  settings and placeholder .env.example, native hosted PostgreSQL URLs with local
+  fallback, safe /databases metadata, configuration-only /ready, explicit CORS,
+  configured trace persistence/redaction, and safe database-unavailable failures.
+  Public profiles remain sales/saas; arbitrary user database connections are
+  forbidden. All 161 tests passed with SaaS PostgreSQL checks enabled. No Gemini
+  calls, database/schema/privilege changes, deployment, or benchmark tuning.
+- Phase 4.3 complete: separate React/TypeScript/Vite/Tailwind frontend with typed
+  API client, /databases discovery, public stateless query UI, examples, accessible
+  controls, responsive light/dark mode, safe errors, and manual retries. Server
+  trace paths are discarded; no browser secrets or fabricated execution details.
+  All 20 mocked frontend tests passed and the TypeScript/production build passed.
+  Backend files were untouched, so Python regression was not rerun. No Gemini
+  calls, database changes, deployment, or provider selection during this phase.
+- Phase 4.4A deployment preparation complete: selected Vercel Hobby + Render
+  Free + two Neon Free projects; $0/month target within free-tier limits.
+  Added Render Blueprint (validated against Render's current JSON Schema),
+  tested Python 3.10.20 pin, manual dump/restore documentation, SQL-created
+  restricted runtime role, and metadata/denied-write verification scripts.
+  All 161 backend tests passed with SaaS checks enabled; 20 frontend tests and
+  production build passed. Model remains gemini-3.5-flash-lite. No application
+  behavior changes, Gemini calls, cloud resources, migrations, or DB changes.
 
 ## 8. Current Known Issue / Next Work
 
-**Known limitations:** Provider RESOURCE_EXHAUSTED remains a separate failure
-mode; Phase 3.7 adds no provider retries. Prompt compliance and impact on live
-categorical-filter accuracy are unmeasured until fresh verification.
+**Known limitations:** A SaaS representation false negative and one convergence
+failure remain; Phase 3 is closed. Provider RESOURCE_EXHAUSTED remains a possible
+separate failure mode; there are no provider retries. The backend has no sessions,
+authentication, or streaming; trace persistence failure yields a null
+trace_path without replacing the answer. /ready checks configuration, not live
+connectivity or quotas. Ephemeral storage may lose traces; no durable cloud trace
+storage is implemented. The selected free-tier stack has not been deployed or
+verified as a live $0/month demo. Production TRACE_ENABLED=false is configured
+for Render's ephemeral filesystem; local/evaluation traces remain unchanged.
 
-**Next step: fresh unseen SaaS benchmark verification.** Wait for explicit user
-approval before calling Gemini. After that result is known, an original sales
-regression benchmark may be requested separately; do not run either automatically.
+The frontend has mocked API verification and a production build; a live
+Gemini-through-browser demo has not been run. It is not publicly deployed.
+
+**Next step: manual Neon migration and Render/Vercel deployment.** The user
+performs account/secret-sensitive steps from docs/deployment.md after review.
+Use restricted analyst_agent URLs, retain SSL options, finalize exact Vercel
+CORS origins, and verify live smoke tests separately. Do not create resources,
+migrate databases, deploy, call Gemini, or rerun benchmarks automatically.
 
 ## 9. Scope Discipline
 
@@ -263,6 +362,21 @@ existing passing tests unless the requested specification intentionally changes.
 Distinguish mocked unit tests, local PostgreSQL integration tests, and live
 Gemini end-to-end checks. Do not send local business/query data to an external
 model during verification without explicit approval when required.
+
+Frontend checks require Node.js 24 LTS (minimum 22.12), with a separate lockfile:
+
+```powershell
+cd frontend
+npm ci
+npm run test
+npm run build
+```
+
+Frontend tests mock fetch and never call the real backend. After frontend-only
+changes, report frontend test/build results and whether backend regression was
+rerun; backend modifications still require the complete Python suite. Keep
+browser configuration public, never render trace_path or raw error diagnostics,
+and do not automatically retry queries or start persistent servers.
 
 ## 11. Development Workflow
 

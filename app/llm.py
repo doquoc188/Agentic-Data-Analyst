@@ -1,15 +1,13 @@
 """Gemini chat model setup and connection test."""
 
-import os
-
-from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
+
+from app.config import get_settings
 
 
 def get_llm() -> ChatGoogleGenerativeAI:
     """Create a Gemini chat model using GOOGLE_API_KEY."""
-    load_dotenv()
-    api_key = os.getenv("GOOGLE_API_KEY")
+    api_key = get_settings().google_api_key
     if not api_key:
         raise RuntimeError("GOOGLE_API_KEY is missing. Set it in .env or the environment.")
 

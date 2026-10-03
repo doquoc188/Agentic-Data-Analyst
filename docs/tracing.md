@@ -8,6 +8,14 @@ and ignored by Git. File names contain a UTC start timestamp and UUID run ID:
 runs/20261003T141812Z_<run_id>.json
 ```
 
+`TRACE_ENABLED=false` disables file persistence without changing in-memory
+observations, answers, or failure handling; API trace_path is then null.
+`TRACE_DIR` selects another directory. Relative paths resolve from the repository
+root; keep custom directories outside Git or ignore them. An unwritable directory
+only emits a safe warning. `python -m app.trace --latest` uses the configured
+directory. Ephemeral hosting disks can lose traces; there is no cloud storage
+integration or public trace-download endpoint.
+
 The manual loop, prompt, eight-response limit, tool behavior, validation recovery,
 and read-only database protections are unchanged. Tracing makes no additional
 model or SQL calls and adds no dependencies. Successful CLI runs can print the
@@ -21,7 +29,8 @@ it does not replace the agent answer or original failure.
 |---|---|
 | `schema_version`, `run_id` | Format version and unique run identity |
 | `started_at`, `finished_at`, `duration_ms` | UTC ISO timestamps and elapsed monotonic duration |
-| `source`, `case_id`, `question` | CLI, evaluation, or other entry point; optional case ID; user question |
+| `source`, `case_id`, `question` | CLI, evaluation, API, or other entry point; optional case ID; user question |
+| `database_profile` | Safe API profile name (`sales`/`saas`); null for existing CLI/evaluation runs |
 | `status`, `termination_reason` | Run completion or failure, independently of analytical correctness |
 | `model` | Provider and model name when available locally |
 | `turns` | Ordered invocation timing, response type, requested tool names/count, safe errors, optional token counts |
@@ -31,9 +40,11 @@ it does not replace the agent answer or original failure.
 | `model_error` | Safe setup, binding, or invocation error diagnostic |
 | `metrics` | Operation counts and total duration, without correctness judgments |
 
-Run statuses are `success`, `iteration_limit`, `model_error`, `tool_error`, and
-`unexpected_error`. Their termination reasons are `success`, `iteration_limit`,
-`model_integration_error`, `tool_runtime_error`, and `unexpected_error`.
+Run statuses are `success`, `iteration_limit`, `model_error`, `tool_error`,
+`database_error`, and `unexpected_error`. Their termination reasons are `success`,
+`iteration_limit`, `model_integration_error`, `tool_runtime_error`,
+`database_unavailable`, and `unexpected_error`. Failed database connections retain
+only fixed safe details; no native connection error text is persisted.
 Validation failures are observations: the overall run can succeed after recovery.
 
 Tool statuses are `success`, `validation_error`, and `runtime_error`. Non-validation
@@ -81,6 +92,8 @@ headers, and environment-dump fields are redacted. Redaction runs before preview
 are sliced and again before JSON publication. Numeric token counts are allowlisted.
 Exception messages, stack traces, provider requests/responses, and environment
 dumps are not captured. Persistence warnings contain no paths or exception details.
+Configured hosted connection URLs and their natively decoded passwords are also
+redacted, including a password appearing alone rather than inside its URL.
 
 ## Inspect a run without rerunning it
 

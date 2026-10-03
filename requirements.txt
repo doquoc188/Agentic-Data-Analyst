@@ -2,3 +2,6 @@ langchain
 langchain-google-genai
 python-dotenv
 psycopg[binary]
+fastapi
+uvicorn
+httpx  # FastAPI TestClient
