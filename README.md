@@ -1,4 +1,4 @@
-# ReAct Agent
+# Agentic Data Analyst
 
 ## Setup
 
