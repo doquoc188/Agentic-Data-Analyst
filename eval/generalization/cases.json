@@ -1,0 +1,909 @@
+[
+  {
+    "id": "saas_active_subscription_count",
+    "question": "How many subscriptions currently have status active?",
+    "difficulty": "easy",
+    "category": "subscriptions",
+    "requires": [
+      "count",
+      "filter"
+    ],
+    "reference_sql": "SELECT COUNT(*) AS subscription_count FROM public.subscriptions WHERE status = 'active'",
+    "expected_columns": [
+      "subscription_count"
+    ],
+    "expected_result": 72,
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "scalar",
+      "numeric_tolerance": 0,
+      "scalar_support": {
+        "label_column": "status",
+        "label_value": "active",
+        "value_column": "count"
+      }
+    }
+  },
+  {
+    "id": "saas_account_count_by_country",
+    "question": "How many accounts are in each country? Return country and account count; no particular row order is needed.",
+    "difficulty": "easy",
+    "category": "accounts",
+    "requires": [
+      "count",
+      "aggregation",
+      "group_by"
+    ],
+    "reference_sql": "SELECT country, COUNT(*) AS account_count FROM public.accounts GROUP BY country",
+    "expected_columns": [
+      "country",
+      "account_count"
+    ],
+    "expected_result": {
+      "columns": [
+        "country",
+        "account_count"
+      ],
+      "rows": [
+        [
+          "United States",
+          10
+        ],
+        [
+          "Germany",
+          10
+        ],
+        [
+          "Vietnam",
+          10
+        ],
+        [
+          "United Kingdom",
+          10
+        ],
+        [
+          "Japan",
+          10
+        ],
+        [
+          "Canada",
+          10
+        ]
+      ]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "required_columns": [
+        "country",
+        "account_count"
+      ],
+      "row_order": "unordered",
+      "numeric_tolerance": 0
+    }
+  },
+  {
+    "id": "saas_distinct_paid_invoice_months",
+    "question": "In how many distinct calendar months were paid invoices issued? Count months using invoice_date, considering only status paid.",
+    "difficulty": "easy",
+    "category": "invoices",
+    "requires": [
+      "count",
+      "distinct",
+      "filter",
+      "temporal"
+    ],
+    "reference_sql": "SELECT COUNT(DISTINCT DATE_TRUNC('month', invoice_date)) AS month_count FROM public.invoices WHERE status = 'paid'",
+    "expected_columns": [
+      "month_count"
+    ],
+    "expected_result": 3,
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "scalar",
+      "numeric_tolerance": 0
+    }
+  },
+  {
+    "id": "saas_unresolved_high_priority_tickets",
+    "question": "How many high-priority support tickets are unresolved? Here unresolved means closed_at is NULL, including both open and pending tickets.",
+    "difficulty": "easy",
+    "category": "support",
+    "requires": [
+      "count",
+      "filter",
+      "null_handling"
+    ],
+    "reference_sql": "SELECT COUNT(*) AS ticket_count FROM public.support_tickets WHERE priority = 'high' AND closed_at IS NULL",
+    "expected_columns": [
+      "ticket_count"
+    ],
+    "expected_result": 20,
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "scalar",
+      "numeric_tolerance": 0
+    }
+  },
+  {
+    "id": "saas_active_seats_by_plan",
+    "question": "For every plan with active subscriptions, return plan name and total active subscription seats. Exclude paused and cancelled subscriptions; no particular row order is needed.",
+    "difficulty": "medium",
+    "category": "subscriptions",
+    "requires": [
+      "join",
+      "join_2",
+      "aggregation",
+      "sum",
+      "filter"
+    ],
+    "reference_sql": "SELECT p.plan_name, SUM(s.seats) AS active_seats FROM public.subscriptions s JOIN public.plans p ON p.plan_id = s.plan_id WHERE s.status = 'active' GROUP BY p.plan_id, p.plan_name",
+    "expected_columns": [
+      "plan_name",
+      "active_seats"
+    ],
+    "expected_result": {
+      "columns": [
+        "plan_name",
+        "active_seats"
+      ],
+      "rows": [
+        [
+          "Scale",
+          194
+        ],
+        [
+          "Enterprise",
+          195
+        ],
+        [
+          "Launch",
+          308
+        ],
+        [
+          "Growth",
+          292
+        ]
+      ]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "required_columns": [
+        "plan_name",
+        "active_seats"
+      ],
+      "row_order": "unordered",
+      "numeric_tolerance": 0
+    }
+  },
+  {
+    "id": "saas_top_plan_current_mrr",
+    "question": "Which one plan generates the most current monthly recurring revenue (MRR) from active subscriptions? Return plan name and MRR in USD. Use the recurring-price metadata, not invoice payments. Break ties by plan name ascending, then plan_id ascending.",
+    "difficulty": "medium",
+    "category": "mrr",
+    "requires": [
+      "join",
+      "join_2",
+      "aggregation",
+      "sum",
+      "revenue",
+      "business_semantics",
+      "metadata",
+      "ranking",
+      "top_k"
+    ],
+    "reference_sql": "SELECT p.plan_name, SUM(s.seats * p.monthly_price_per_seat) AS mrr FROM public.subscriptions s JOIN public.plans p ON p.plan_id = s.plan_id WHERE s.status = 'active' GROUP BY p.plan_id, p.plan_name ORDER BY mrr DESC, p.plan_name ASC, p.plan_id ASC LIMIT 1",
+    "expected_columns": [
+      "plan_name",
+      "mrr"
+    ],
+    "expected_result": {
+      "columns": [
+        "plan_name",
+        "mrr"
+      ],
+      "rows": [
+        [
+          "Enterprise",
+          19305.0
+        ]
+      ]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "required_columns": [
+        "plan_name",
+        "mrr"
+      ],
+      "row_order": "strict",
+      "row_match": "prefix",
+      "numeric_tolerance": 0.01
+    }
+  },
+  {
+    "id": "saas_paid_invoice_count_by_month",
+    "question": "How many paid invoices were issued in each calendar month, using invoice_date? Return month (YYYY-MM) and paid invoice count; no particular row order is needed.",
+    "difficulty": "medium",
+    "category": "invoices",
+    "requires": [
+      "temporal",
+      "aggregation",
+      "group_by",
+      "count",
+      "filter"
+    ],
+    "reference_sql": "SELECT TO_CHAR(invoice_date, 'YYYY-MM') AS month, COUNT(*) AS paid_invoice_count FROM public.invoices WHERE status = 'paid' GROUP BY TO_CHAR(invoice_date, 'YYYY-MM')",
+    "expected_columns": [
+      "month",
+      "paid_invoice_count"
+    ],
+    "expected_result": {
+      "columns": [
+        "month",
+        "paid_invoice_count"
+      ],
+      "rows": [
+        [
+          "2025-02",
+          70
+        ],
+        [
+          "2025-03",
+          70
+        ],
+        [
+          "2025-01",
+          72
+        ]
+      ]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "required_columns": [
+        "month",
+        "paid_invoice_count"
+      ],
+      "row_order": "unordered",
+      "numeric_tolerance": 0,
+      "time_granularity": "month"
+    }
+  },
+  {
+    "id": "saas_average_paid_invoice_by_plan",
+    "question": "For each plan with paid invoices, what is the average paid invoice amount in USD, regardless of the subscription's current status? Return plan name and average amount rounded to two decimal places; no particular row order is needed.",
+    "difficulty": "medium",
+    "category": "invoices",
+    "requires": [
+      "join",
+      "join_3",
+      "aggregation",
+      "avg",
+      "filter",
+      "business_semantics"
+    ],
+    "reference_sql": "SELECT p.plan_name, ROUND(AVG(i.amount), 2) AS average_paid_amount FROM public.invoices i JOIN public.subscriptions s ON s.subscription_id = i.subscription_id JOIN public.plans p ON p.plan_id = s.plan_id WHERE i.status = 'paid' GROUP BY p.plan_id, p.plan_name",
+    "expected_columns": [
+      "plan_name",
+      "average_paid_amount"
+    ],
+    "expected_result": {
+      "columns": [
+        "plan_name",
+        "average_paid_amount"
+      ],
+      "rows": [
+        [
+          "Scale",
+          741.18
+        ],
+        [
+          "Enterprise",
+          1426.75
+        ],
+        [
+          "Launch",
+          172.24
+        ],
+        [
+          "Growth",
+          403.65
+        ]
+      ]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "required_columns": [
+        "plan_name",
+        "average_paid_amount"
+      ],
+      "row_order": "unordered",
+      "numeric_tolerance": 0.01
+    }
+  },
+  {
+    "id": "saas_resolved_ticket_duration_by_priority",
+    "question": "For each support ticket priority with resolved tickets, return priority and average resolution duration in hours, rounded to two decimals. Measure closed_at minus opened_at; exclude tickets with NULL closed_at. No particular row order is needed.",
+    "difficulty": "medium",
+    "category": "support",
+    "requires": [
+      "aggregation",
+      "avg",
+      "temporal",
+      "duration",
+      "null_handling",
+      "metadata"
+    ],
+    "reference_sql": "SELECT priority, ROUND(AVG(EXTRACT(EPOCH FROM (closed_at - opened_at)) / 3600), 2) AS average_hours FROM public.support_tickets WHERE closed_at IS NOT NULL GROUP BY priority",
+    "expected_columns": [
+      "priority",
+      "average_hours"
+    ],
+    "expected_result": {
+      "columns": [
+        "priority",
+        "average_hours"
+      ],
+      "rows": [
+        [
+          "high",
+          35.6
+        ],
+        [
+          "low",
+          35.6
+        ],
+        [
+          "normal",
+          35.6
+        ]
+      ]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "required_columns": [
+        "priority",
+        "average_hours"
+      ],
+      "row_order": "unordered",
+      "numeric_tolerance": 0.01
+    }
+  },
+  {
+    "id": "saas_active_seats_by_country",
+    "question": "For each country with active subscriptions, return country and total active seats across its accounts. Exclude paused and cancelled subscriptions; no particular row order is needed.",
+    "difficulty": "medium",
+    "category": "accounts",
+    "requires": [
+      "join",
+      "join_2",
+      "aggregation",
+      "sum",
+      "filter"
+    ],
+    "reference_sql": "SELECT a.country, SUM(s.seats) AS active_seats FROM public.accounts a JOIN public.subscriptions s ON s.account_id = a.account_id WHERE s.status = 'active' GROUP BY a.country",
+    "expected_columns": [
+      "country",
+      "active_seats"
+    ],
+    "expected_result": {
+      "columns": [
+        "country",
+        "active_seats"
+      ],
+      "rows": [
+        [
+          "United States",
+          174
+        ],
+        [
+          "Germany",
+          164
+        ],
+        [
+          "Vietnam",
+          154
+        ],
+        [
+          "United Kingdom",
+          154
+        ],
+        [
+          "Japan",
+          184
+        ],
+        [
+          "Canada",
+          159
+        ]
+      ]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "required_columns": [
+        "country",
+        "active_seats"
+      ],
+      "row_order": "unordered",
+      "numeric_tolerance": 0
+    }
+  },
+  {
+    "id": "saas_top_five_paid_revenue_accounts",
+    "question": "Which five accounts generated the most paid invoice revenue in USD across all available history? Include paid invoices regardless of current subscription status. Return account name and total paid revenue, ordered by revenue descending; break ties by account name ascending, then account_id ascending.",
+    "difficulty": "hard",
+    "category": "invoices",
+    "requires": [
+      "join",
+      "join_3",
+      "aggregation",
+      "sum",
+      "revenue",
+      "ranking",
+      "top_k",
+      "business_semantics"
+    ],
+    "reference_sql": "SELECT a.account_name, SUM(i.amount) AS paid_revenue FROM public.accounts a JOIN public.subscriptions s ON s.account_id = a.account_id JOIN public.invoices i ON i.subscription_id = s.subscription_id WHERE i.status = 'paid' GROUP BY a.account_id, a.account_name ORDER BY paid_revenue DESC, a.account_name ASC, a.account_id ASC LIMIT 5",
+    "expected_columns": [
+      "account_name",
+      "paid_revenue"
+    ],
+    "expected_result": {
+      "columns": [
+        "account_name",
+        "paid_revenue"
+      ],
+      "rows": [
+        [
+          "Synthetic Account 047",
+          5130.0
+        ],
+        [
+          "Synthetic Account 054",
+          5036.5
+        ],
+        [
+          "Synthetic Account 053",
+          4698.0
+        ],
+        [
+          "Synthetic Account 039",
+          4503.5
+        ],
+        [
+          "Synthetic Account 046",
+          4269.5
+        ]
+      ]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "required_columns": [
+        "account_name",
+        "paid_revenue"
+      ],
+      "row_order": "strict",
+      "row_match": "prefix",
+      "numeric_tolerance": 0.01
+    }
+  },
+  {
+    "id": "saas_active_accounts_without_paid_invoices",
+    "question": "Which accounts have at least one currently active subscription but have never had a paid invoice on any of their subscriptions, including paused or cancelled ones? Return each account name once; no particular row order is needed.",
+    "difficulty": "hard",
+    "category": "subscriptions",
+    "requires": [
+      "join",
+      "join_3",
+      "distinct",
+      "anti_join",
+      "filter",
+      "multi_step"
+    ],
+    "reference_sql": "SELECT DISTINCT a.account_name FROM public.accounts a JOIN public.subscriptions s ON s.account_id = a.account_id WHERE s.status = 'active' AND NOT EXISTS (SELECT 1 FROM public.subscriptions all_s JOIN public.invoices i ON i.subscription_id = all_s.subscription_id WHERE all_s.account_id = a.account_id AND i.status = 'paid')",
+    "expected_columns": [
+      "account_name"
+    ],
+    "expected_result": {
+      "columns": [
+        "account_name"
+      ],
+      "rows": [
+        [
+          "Synthetic Account 022"
+        ],
+        [
+          "Synthetic Account 033"
+        ],
+        [
+          "Synthetic Account 044"
+        ]
+      ]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "required_columns": [
+        "account_name"
+      ],
+      "row_order": "unordered",
+      "numeric_tolerance": 0
+    }
+  },
+  {
+    "id": "saas_accounts_with_multiple_plans",
+    "question": "Which accounts have subscriptions on more than one distinct plan? Include every subscription status and return account name and distinct plan count; no particular row order is needed.",
+    "difficulty": "hard",
+    "category": "subscriptions",
+    "requires": [
+      "join",
+      "join_2",
+      "distinct",
+      "aggregation",
+      "having",
+      "count"
+    ],
+    "reference_sql": "SELECT a.account_name, COUNT(DISTINCT s.plan_id) AS plan_count FROM public.accounts a JOIN public.subscriptions s ON s.account_id = a.account_id GROUP BY a.account_id, a.account_name HAVING COUNT(DISTINCT s.plan_id) > 1",
+    "expected_columns": [
+      "account_name",
+      "plan_count"
+    ],
+    "expected_result": {
+      "columns": [
+        "account_name",
+        "plan_count"
+      ],
+      "rows": [
+        [
+          "Synthetic Account 001",
+          2
+        ],
+        [
+          "Synthetic Account 002",
+          2
+        ],
+        [
+          "Synthetic Account 003",
+          2
+        ],
+        [
+          "Synthetic Account 005",
+          2
+        ],
+        [
+          "Synthetic Account 006",
+          2
+        ],
+        [
+          "Synthetic Account 007",
+          2
+        ],
+        [
+          "Synthetic Account 009",
+          2
+        ],
+        [
+          "Synthetic Account 010",
+          2
+        ],
+        [
+          "Synthetic Account 011",
+          2
+        ],
+        [
+          "Synthetic Account 013",
+          2
+        ],
+        [
+          "Synthetic Account 014",
+          2
+        ],
+        [
+          "Synthetic Account 015",
+          2
+        ],
+        [
+          "Synthetic Account 017",
+          2
+        ],
+        [
+          "Synthetic Account 018",
+          2
+        ],
+        [
+          "Synthetic Account 019",
+          2
+        ],
+        [
+          "Synthetic Account 021",
+          2
+        ],
+        [
+          "Synthetic Account 022",
+          2
+        ],
+        [
+          "Synthetic Account 023",
+          2
+        ],
+        [
+          "Synthetic Account 025",
+          2
+        ],
+        [
+          "Synthetic Account 026",
+          2
+        ],
+        [
+          "Synthetic Account 027",
+          2
+        ],
+        [
+          "Synthetic Account 029",
+          2
+        ],
+        [
+          "Synthetic Account 030",
+          2
+        ],
+        [
+          "Synthetic Account 031",
+          2
+        ],
+        [
+          "Synthetic Account 033",
+          2
+        ],
+        [
+          "Synthetic Account 034",
+          2
+        ],
+        [
+          "Synthetic Account 035",
+          2
+        ],
+        [
+          "Synthetic Account 037",
+          2
+        ],
+        [
+          "Synthetic Account 038",
+          2
+        ],
+        [
+          "Synthetic Account 039",
+          2
+        ],
+        [
+          "Synthetic Account 041",
+          2
+        ],
+        [
+          "Synthetic Account 042",
+          2
+        ],
+        [
+          "Synthetic Account 043",
+          2
+        ],
+        [
+          "Synthetic Account 045",
+          2
+        ],
+        [
+          "Synthetic Account 046",
+          2
+        ],
+        [
+          "Synthetic Account 047",
+          2
+        ],
+        [
+          "Synthetic Account 049",
+          2
+        ],
+        [
+          "Synthetic Account 050",
+          2
+        ],
+        [
+          "Synthetic Account 051",
+          2
+        ],
+        [
+          "Synthetic Account 053",
+          2
+        ],
+        [
+          "Synthetic Account 054",
+          2
+        ],
+        [
+          "Synthetic Account 055",
+          2
+        ],
+        [
+          "Synthetic Account 057",
+          2
+        ],
+        [
+          "Synthetic Account 058",
+          2
+        ],
+        [
+          "Synthetic Account 059",
+          2
+        ]
+      ]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "required_columns": [
+        "account_name",
+        "plan_count"
+      ],
+      "row_order": "unordered",
+      "numeric_tolerance": 0
+    }
+  },
+  {
+    "id": "saas_japan_active_mrr_by_tier",
+    "question": "For accounts in Japan, what is current monthly recurring revenue (MRR) in USD by plan tier, counting only active subscriptions? Return each tier with active subscriptions and its MRR using the recurring-price metadata, not invoice payments; no particular row order is needed.",
+    "difficulty": "hard",
+    "category": "mrr",
+    "requires": [
+      "join",
+      "join_3",
+      "aggregation",
+      "sum",
+      "revenue",
+      "filter",
+      "business_semantics",
+      "metadata"
+    ],
+    "reference_sql": "SELECT p.plan_tier, SUM(s.seats * p.monthly_price_per_seat) AS mrr FROM public.accounts a JOIN public.subscriptions s ON s.account_id = a.account_id JOIN public.plans p ON p.plan_id = s.plan_id WHERE a.country = 'Japan' AND s.status = 'active' GROUP BY p.plan_tier",
+    "expected_columns": [
+      "plan_tier",
+      "mrr"
+    ],
+    "expected_result": {
+      "columns": [
+        "plan_tier",
+        "mrr"
+      ],
+      "rows": [
+        [
+          "Enterprise",
+          4059.0
+        ],
+        [
+          "Business",
+          3748.0
+        ],
+        [
+          "Starter",
+          612.0
+        ]
+      ]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "required_columns": [
+        "plan_tier",
+        "mrr"
+      ],
+      "row_order": "unordered",
+      "numeric_tolerance": 0.01
+    }
+  },
+  {
+    "id": "saas_accounts_above_paid_revenue_threshold",
+    "question": "Which accounts have more than 1,000,000 USD in total paid invoice revenue across all available history, regardless of current subscription status? Return account name and paid revenue; if none qualify, return no accounts. No particular row order is needed.",
+    "difficulty": "hard",
+    "category": "invoices",
+    "requires": [
+      "join",
+      "join_3",
+      "aggregation",
+      "sum",
+      "revenue",
+      "having",
+      "zero_result"
+    ],
+    "reference_sql": "SELECT a.account_name, SUM(i.amount) AS paid_revenue FROM public.accounts a JOIN public.subscriptions s ON s.account_id = a.account_id JOIN public.invoices i ON i.subscription_id = s.subscription_id WHERE i.status = 'paid' GROUP BY a.account_id, a.account_name HAVING SUM(i.amount) > 1000000",
+    "expected_columns": [
+      "account_name",
+      "paid_revenue"
+    ],
+    "expected_result": {
+      "columns": [
+        "account_name",
+        "paid_revenue"
+      ],
+      "rows": []
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "required_columns": [
+        "account_name",
+        "paid_revenue"
+      ],
+      "row_order": "unordered",
+      "numeric_tolerance": 0.01
+    }
+  },
+  {
+    "id": "saas_top_three_ticket_accounts_active_enterprise",
+    "question": "Among accounts with at least one currently active Enterprise-tier subscription, which three opened the most support tickets? Count each ticket once across all ticket statuses, regardless of how many qualifying subscriptions the account has. Return account name and ticket count, ordered by ticket count descending; break ties by account name ascending, then account_id ascending. Include only accounts that opened tickets.",
+    "difficulty": "hard",
+    "category": "support",
+    "requires": [
+      "join",
+      "join_4",
+      "distinct",
+      "aggregation",
+      "count",
+      "ranking",
+      "top_k",
+      "multi_step"
+    ],
+    "reference_sql": "SELECT a.account_name, COUNT(t.ticket_id) AS ticket_count FROM public.accounts a JOIN public.support_tickets t ON t.account_id = a.account_id JOIN (SELECT DISTINCT s.account_id FROM public.subscriptions s JOIN public.plans p ON p.plan_id = s.plan_id WHERE s.status = 'active' AND p.plan_tier = 'Enterprise') eligible ON eligible.account_id = a.account_id GROUP BY a.account_id, a.account_name ORDER BY ticket_count DESC, a.account_name ASC, a.account_id ASC LIMIT 3",
+    "expected_columns": [
+      "account_name",
+      "ticket_count"
+    ],
+    "expected_result": {
+      "columns": [
+        "account_name",
+        "ticket_count"
+      ],
+      "rows": [
+        [
+          "Synthetic Account 037",
+          5
+        ],
+        [
+          "Synthetic Account 038",
+          5
+        ],
+        [
+          "Synthetic Account 039",
+          5
+        ]
+      ]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "required_columns": [
+        "account_name",
+        "ticket_count"
+      ],
+      "row_order": "strict",
+      "row_match": "prefix",
+      "numeric_tolerance": 0
+    }
+  }
+]

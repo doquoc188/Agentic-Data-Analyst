@@ -71,8 +71,8 @@ class DescribeTableTests(unittest.TestCase):
         cursor = MagicMock()
         cursor.fetchone.return_value = (1,)
         cursor.fetchall.side_effect = [
-            [("first_part", "integer", "NO", None),
-             ("second_part", "integer", "NO", None)],
+            [("first_part", "integer", "NO", None, None),
+             ("second_part", "integer", "NO", None, None)],
             [("second_part",), ("first_part",)],
             [],
         ]
@@ -90,6 +90,33 @@ class DescribeTableTests(unittest.TestCase):
             description,
             "Table 'does_not_exist' was not found in the public schema.",
         )
+
+
+class ColumnCommentTests(unittest.TestCase):
+    def test_description_comes_from_parameterized_catalog_lookup(self):
+        comment = "Fractional discount rate: 0.10 means a 10% discount."
+        cursor = MagicMock()
+        cursor.fetchone.return_value = (1,)
+        cursor.fetchall.side_effect = [
+            [("discount_pct", "numeric", "NO", "0", comment),
+             ("quantity", "integer", "NO", None, None)],
+            [], [],
+        ]
+        connection = MagicMock()
+        connection.__enter__.return_value = connection
+        connection.cursor.return_value = cursor
+        cursor.__enter__.return_value = cursor
+        table_name = "table' supplied by caller"
+        with patch("app.tools.get_connection", return_value=connection):
+            description = describe_table.invoke({"table_name": table_name})
+        self.assertIn("- discount_pct: numeric, NOT NULL, DEFAULT 0\n  description: " + comment, description)
+        self.assertIn("- quantity: integer, NOT NULL\n\nPRIMARY KEY:", description)
+        for call in cursor.execute.call_args_list:
+            self.assertEqual(call.args[1], (table_name,))
+            self.assertNotIn(table_name, call.args[0])
+        self.assertIn("col_description", cursor.execute.call_args_list[1].args[0])
+        cursor.__exit__.assert_called_once()
+        connection.__exit__.assert_called_once()
 
 
 class ExecuteSqlTests(unittest.TestCase):

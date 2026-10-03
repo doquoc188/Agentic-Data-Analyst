@@ -61,7 +61,7 @@ def get_schema() -> str:
 
 @tool("describe_table")
 def describe_table(table_name: str) -> str:
-    """Describe a public table's columns, defaults, primary key, and foreign keys."""
+    """Describe a public table's columns, business descriptions, defaults, primary key, and foreign keys."""
     with get_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
@@ -79,10 +79,16 @@ def describe_table(table_name: str) -> str:
 
             cursor.execute(
                 """
-                SELECT column_name, data_type, is_nullable, column_default
-                FROM information_schema.columns
-                WHERE table_schema = 'public' AND table_name = %s
-                ORDER BY ordinal_position;
+                SELECT c.column_name, c.data_type, c.is_nullable, c.column_default,
+                       pg_catalog.col_description(rel.oid, a.attnum) AS description
+                FROM information_schema.columns AS c
+                JOIN pg_catalog.pg_namespace AS ns ON ns.nspname = c.table_schema
+                JOIN pg_catalog.pg_class AS rel
+                  ON rel.relnamespace = ns.oid AND rel.relname = c.table_name
+                JOIN pg_catalog.pg_attribute AS a
+                  ON a.attrelid = rel.oid AND a.attname = c.column_name
+                WHERE c.table_schema = 'public' AND c.table_name = %s
+                ORDER BY c.ordinal_position;
                 """,
                 (table_name,),
             )
@@ -124,12 +130,14 @@ def describe_table(table_name: str) -> str:
             foreign_keys = [row[0] for row in cursor.fetchall()]
 
     lines = [f"TABLE: {table_name}", "", "COLUMNS:"]
-    for column_name, data_type, is_nullable, default in columns:
+    for column_name, data_type, is_nullable, default, description in columns:
         null_status = "NULL" if is_nullable == "YES" else "NOT NULL"
         column = f"- {column_name}: {data_type}, {null_status}"
         if default is not None:
             column += f", DEFAULT {default}"
         lines.append(column)
+        if description:
+            lines.append(f"  description: {description}")
     if not columns:
         lines.append("- None")
 

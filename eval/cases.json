@@ -1,0 +1,1248 @@
+[
+  {
+    "id": "total_orders",
+    "category": "basic",
+    "difficulty": "easy",
+    "question": "How many orders have been recorded?",
+    "reference_sql": "SELECT COUNT(*) AS order_count FROM public.orders",
+    "expected_result": 300,
+    "requires": [
+      "count"
+    ],
+    "comparison": {
+      "result_type": "scalar",
+      "column_matching": "strict",
+      "row_order": "strict",
+      "numeric_tolerance": 0,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "completed_orders",
+    "category": "basic",
+    "difficulty": "easy",
+    "question": "How many orders were completed?",
+    "reference_sql": "SELECT COUNT(*) AS completed_orders FROM public.orders WHERE status = 'Completed'",
+    "expected_result": 198,
+    "requires": [
+      "count",
+      "filter"
+    ],
+    "comparison": {
+      "result_type": "scalar",
+      "column_matching": "strict",
+      "row_order": "strict",
+      "numeric_tolerance": 0,
+      "time_granularity": null,
+      "scalar_support": {
+        "label_column": "status",
+        "label_value": "Completed",
+        "value_column": "count"
+      }
+    }
+  },
+  {
+    "id": "customer_cities",
+    "category": "basic",
+    "difficulty": "easy",
+    "question": "How many different cities do our customers come from?",
+    "reference_sql": "SELECT COUNT(DISTINCT city) AS city_count FROM public.customers",
+    "expected_result": 6,
+    "requires": [
+      "count",
+      "distinct"
+    ],
+    "comparison": {
+      "result_type": "scalar",
+      "column_matching": "strict",
+      "row_order": "strict",
+      "numeric_tolerance": 0,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "oldest_pending_orders",
+    "category": "basic",
+    "difficulty": "easy",
+    "question": "Which five pending orders are the oldest? Return order_id and order_date. If dates tie, use order_id ascending.",
+    "reference_sql": "SELECT order_id, order_date FROM public.orders WHERE status = 'Pending' ORDER BY order_date ASC, order_id ASC LIMIT 5",
+    "expected_result": {
+      "columns": [
+        "order_id",
+        "order_date"
+      ],
+      "rows": []
+    },
+    "requires": [
+      "filter",
+      "sorting",
+      "top_k",
+      "zero_result"
+    ],
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "strict",
+      "row_order": "strict",
+      "numeric_tolerance": 0,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "orders_by_status",
+    "category": "aggregation",
+    "difficulty": "easy",
+    "question": "How many orders are in each status?",
+    "reference_sql": "SELECT status, COUNT(*) AS order_count FROM public.orders GROUP BY status ORDER BY order_count DESC, status ASC",
+    "expected_result": {
+      "columns": [
+        "status",
+        "order_count"
+      ],
+      "rows": [
+        [
+          "Completed",
+          198
+        ],
+        [
+          "Cancelled",
+          57
+        ],
+        [
+          "Returned",
+          45
+        ]
+      ]
+    },
+    "requires": [
+      "group_by",
+      "count",
+      "sorting"
+    ],
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "unordered",
+      "numeric_tolerance": 0,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "average_units_per_item",
+    "category": "aggregation",
+    "difficulty": "easy",
+    "question": "What is the average number of units per order item?",
+    "reference_sql": "SELECT ROUND(AVG(quantity), 2) AS average_units FROM public.order_items",
+    "expected_result": 2.9,
+    "requires": [
+      "average"
+    ],
+    "numeric_tolerance": 0.01,
+    "comparison": {
+      "result_type": "scalar",
+      "column_matching": "strict",
+      "row_order": "strict",
+      "numeric_tolerance": 0.01,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "completed_customers",
+    "category": "aggregation",
+    "difficulty": "medium",
+    "question": "How many different customers have completed at least one order?",
+    "reference_sql": "SELECT COUNT(DISTINCT customer_id) AS customer_count FROM public.orders WHERE status = 'Completed'",
+    "expected_result": 20,
+    "requires": [
+      "count",
+      "distinct",
+      "filter"
+    ],
+    "comparison": {
+      "result_type": "scalar",
+      "column_matching": "strict",
+      "row_order": "strict",
+      "numeric_tolerance": 0,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "orders_per_month",
+    "category": "temporal",
+    "difficulty": "medium",
+    "question": "How many orders were placed each month?",
+    "reference_sql": "SELECT TO_CHAR(order_date, 'YYYY-MM') AS order_month, COUNT(*) AS order_count FROM public.orders GROUP BY TO_CHAR(order_date, 'YYYY-MM') ORDER BY order_month ASC",
+    "expected_result": {
+      "columns": [
+        "order_month",
+        "order_count"
+      ],
+      "rows": [
+        [
+          "2025-01",
+          8
+        ],
+        [
+          "2025-02",
+          12
+        ],
+        [
+          "2025-03",
+          16
+        ],
+        [
+          "2025-04",
+          19
+        ],
+        [
+          "2025-05",
+          15
+        ],
+        [
+          "2025-06",
+          18
+        ],
+        [
+          "2025-07",
+          9
+        ],
+        [
+          "2025-08",
+          18
+        ],
+        [
+          "2025-09",
+          16
+        ],
+        [
+          "2025-10",
+          18
+        ],
+        [
+          "2025-11",
+          16
+        ],
+        [
+          "2025-12",
+          15
+        ],
+        [
+          "2026-01",
+          12
+        ],
+        [
+          "2026-02",
+          8
+        ],
+        [
+          "2026-03",
+          18
+        ],
+        [
+          "2026-04",
+          16
+        ],
+        [
+          "2026-05",
+          10
+        ],
+        [
+          "2026-06",
+          17
+        ],
+        [
+          "2026-07",
+          18
+        ],
+        [
+          "2026-08",
+          13
+        ],
+        [
+          "2026-09",
+          8
+        ]
+      ]
+    },
+    "requires": [
+      "temporal",
+      "group_by",
+      "count",
+      "sorting"
+    ],
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "unordered",
+      "numeric_tolerance": 0,
+      "time_granularity": "month"
+    }
+  },
+  {
+    "id": "busiest_completed_month",
+    "category": "temporal",
+    "difficulty": "medium",
+    "question": "Which month had the most completed orders? If months tie, choose the earliest month.",
+    "reference_sql": "SELECT TO_CHAR(order_date, 'YYYY-MM') AS order_month, COUNT(*) AS completed_orders FROM public.orders WHERE status = 'Completed' GROUP BY TO_CHAR(order_date, 'YYYY-MM') ORDER BY completed_orders DESC, order_month ASC LIMIT 1",
+    "expected_result": {
+      "columns": [
+        "order_month",
+        "completed_orders"
+      ],
+      "rows": [
+        [
+          "2025-08",
+          15
+        ]
+      ]
+    },
+    "requires": [
+      "temporal",
+      "filter",
+      "group_by",
+      "count",
+      "sorting",
+      "top_k"
+    ],
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "strict",
+      "numeric_tolerance": 0,
+      "time_granularity": "month",
+      "row_match": "prefix"
+    }
+  },
+  {
+    "id": "completed_revenue_per_month",
+    "category": "temporal",
+    "difficulty": "medium",
+    "question": "How much revenue did completed orders generate each month after discounts?",
+    "reference_sql": "SELECT TO_CHAR(o.order_date, 'YYYY-MM') AS order_month, ROUND(SUM(oi.quantity * oi.unit_price * (1 - oi.discount_pct)), 2) AS revenue FROM public.orders AS o JOIN public.order_items AS oi ON oi.order_id = o.order_id WHERE o.status = 'Completed' GROUP BY TO_CHAR(o.order_date, 'YYYY-MM') ORDER BY order_month ASC",
+    "expected_result": {
+      "columns": [
+        "order_month",
+        "revenue"
+      ],
+      "rows": [
+        [
+          "2025-01",
+          706.55
+        ],
+        [
+          "2025-02",
+          939.84
+        ],
+        [
+          "2025-03",
+          1984.38
+        ],
+        [
+          "2025-04",
+          1367.61
+        ],
+        [
+          "2025-05",
+          2235.2
+        ],
+        [
+          "2025-06",
+          1826.88
+        ],
+        [
+          "2025-07",
+          390.62
+        ],
+        [
+          "2025-08",
+          2627.42
+        ],
+        [
+          "2025-09",
+          922.59
+        ],
+        [
+          "2025-10",
+          3971.52
+        ],
+        [
+          "2025-11",
+          1483.77
+        ],
+        [
+          "2025-12",
+          1198.97
+        ],
+        [
+          "2026-01",
+          748.56
+        ],
+        [
+          "2026-02",
+          228.75
+        ],
+        [
+          "2026-03",
+          1353.63
+        ],
+        [
+          "2026-04",
+          2244.89
+        ],
+        [
+          "2026-05",
+          1840.32
+        ],
+        [
+          "2026-06",
+          736.84
+        ],
+        [
+          "2026-07",
+          3086.79
+        ],
+        [
+          "2026-08",
+          2237.64
+        ],
+        [
+          "2026-09",
+          138.12
+        ]
+      ]
+    },
+    "requires": [
+      "join",
+      "revenue",
+      "temporal",
+      "filter",
+      "group_by",
+      "sum"
+    ],
+    "numeric_tolerance": 0.01,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "unordered",
+      "numeric_tolerance": 0.01,
+      "time_granularity": "month"
+    }
+  },
+  {
+    "id": "completed_orders_by_city",
+    "category": "join",
+    "difficulty": "medium",
+    "question": "How many completed orders came from each city?",
+    "reference_sql": "SELECT c.city, COUNT(*) AS completed_orders FROM public.customers AS c JOIN public.orders AS o ON o.customer_id = c.customer_id WHERE o.status = 'Completed' GROUP BY c.city ORDER BY completed_orders DESC, c.city ASC",
+    "expected_result": {
+      "columns": [
+        "city",
+        "completed_orders"
+      ],
+      "rows": [
+        [
+          "Hanoi",
+          48
+        ],
+        [
+          "Ho Chi Minh City",
+          44
+        ],
+        [
+          "Da Nang",
+          35
+        ],
+        [
+          "Hai Phong",
+          27
+        ],
+        [
+          "Hue",
+          23
+        ],
+        [
+          "Can Tho",
+          21
+        ]
+      ]
+    },
+    "requires": [
+      "join",
+      "filter",
+      "group_by",
+      "count",
+      "city"
+    ],
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "unordered",
+      "numeric_tolerance": 0,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "top_customers_by_order_count",
+    "category": "ranking",
+    "difficulty": "medium",
+    "question": "Which five customers placed the most completed orders? Include the order counts. Break ties by customer name, then city, alphabetically.",
+    "reference_sql": "SELECT c.customer_name, c.city, COUNT(*) AS completed_orders FROM public.customers AS c JOIN public.orders AS o ON o.customer_id = c.customer_id WHERE o.status = 'Completed' GROUP BY c.customer_id, c.customer_name, c.city ORDER BY completed_orders DESC, c.customer_name ASC, c.city ASC LIMIT 5",
+    "expected_result": {
+      "columns": [
+        "customer_name",
+        "city",
+        "completed_orders"
+      ],
+      "rows": [
+        [
+          "Mai Thu Trang",
+          "Ho Chi Minh City",
+          16
+        ],
+        [
+          "Luong Khanh Vy",
+          "Hue",
+          15
+        ],
+        [
+          "Trinh Hoang Son",
+          "Hai Phong",
+          15
+        ],
+        [
+          "Bui Ngoc Mai",
+          "Can Tho",
+          12
+        ],
+        [
+          "Hoang Khanh Linh",
+          "Hai Phong",
+          12
+        ]
+      ]
+    },
+    "requires": [
+      "join",
+      "filter",
+      "group_by",
+      "count",
+      "sorting",
+      "top_k",
+      "customer"
+    ],
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "strict",
+      "numeric_tolerance": 0,
+      "time_granularity": null,
+      "required_columns": [
+        "customer_name",
+        "completed_orders"
+      ],
+      "row_match": "prefix"
+    }
+  },
+  {
+    "id": "units_by_category_all_orders",
+    "category": "aggregation",
+    "difficulty": "medium",
+    "question": "How many units appear on orders in each product category, regardless of order status?",
+    "reference_sql": "SELECT p.category, SUM(oi.quantity) AS units FROM public.products AS p JOIN public.order_items AS oi ON oi.product_id = p.product_id GROUP BY p.category ORDER BY units DESC, p.category ASC",
+    "expected_result": {
+      "columns": [
+        "category",
+        "units"
+      ],
+      "rows": [
+        [
+          "Electronics",
+          370
+        ],
+        [
+          "Furniture",
+          228
+        ],
+        [
+          "Stationery",
+          137
+        ],
+        [
+          "Accessories",
+          135
+        ]
+      ]
+    },
+    "requires": [
+      "join",
+      "group_by",
+      "sum",
+      "category"
+    ],
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "unordered",
+      "numeric_tolerance": 0,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "top_products_by_completed_units",
+    "category": "ranking",
+    "difficulty": "medium",
+    "question": "Which five products have the most units on completed orders? Include the unit totals. Break ties by product name, then category, alphabetically.",
+    "reference_sql": "SELECT p.product_name, p.category, SUM(oi.quantity) AS units FROM public.products AS p JOIN public.order_items AS oi ON oi.product_id = p.product_id JOIN public.orders AS o ON o.order_id = oi.order_id WHERE o.status = 'Completed' GROUP BY p.product_id, p.product_name, p.category ORDER BY units DESC, p.product_name ASC, p.category ASC LIMIT 5",
+    "expected_result": {
+      "columns": [
+        "product_name",
+        "category",
+        "units"
+      ],
+      "rows": [
+        [
+          "Backpack",
+          "Accessories",
+          68
+        ],
+        [
+          "Desk Lamp",
+          "Furniture",
+          59
+        ],
+        [
+          "Standing Desk",
+          "Furniture",
+          55
+        ],
+        [
+          "Wireless Mouse",
+          "Electronics",
+          55
+        ],
+        [
+          "USB-C Hub",
+          "Electronics",
+          52
+        ]
+      ]
+    },
+    "requires": [
+      "join",
+      "join_3",
+      "filter",
+      "group_by",
+      "sum",
+      "sorting",
+      "top_k",
+      "product"
+    ],
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "strict",
+      "numeric_tolerance": 0,
+      "time_granularity": null,
+      "required_columns": [
+        "product_name",
+        "units"
+      ],
+      "row_match": "prefix"
+    }
+  },
+  {
+    "id": "top_customer_completed_revenue",
+    "category": "multi_join",
+    "difficulty": "hard",
+    "question": "Which customer generated the most revenue from completed orders after discounts? Include the revenue amount. Break ties by customer name, then city, alphabetically.",
+    "reference_sql": "SELECT c.customer_name, c.city, ROUND(SUM(oi.quantity * oi.unit_price * (1 - oi.discount_pct)), 2) AS revenue FROM public.customers AS c JOIN public.orders AS o ON o.customer_id = c.customer_id JOIN public.order_items AS oi ON oi.order_id = o.order_id WHERE o.status = 'Completed' GROUP BY c.customer_id, c.customer_name, c.city ORDER BY revenue DESC, c.customer_name ASC, c.city ASC LIMIT 1",
+    "expected_result": {
+      "columns": [
+        "customer_name",
+        "city",
+        "revenue"
+      ],
+      "rows": [
+        [
+          "Bui Ngoc Mai",
+          "Can Tho",
+          2722.89
+        ]
+      ]
+    },
+    "requires": [
+      "join",
+      "join_3",
+      "revenue",
+      "filter",
+      "group_by",
+      "sum",
+      "sorting",
+      "top_k",
+      "customer"
+    ],
+    "numeric_tolerance": 0.01,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "strict",
+      "numeric_tolerance": 0.01,
+      "time_granularity": null,
+      "required_columns": [
+        "customer_name",
+        "revenue"
+      ],
+      "row_match": "prefix"
+    }
+  },
+  {
+    "id": "top_city_completed_revenue",
+    "category": "multi_join",
+    "difficulty": "hard",
+    "question": "Which city generated the most revenue from completed orders after discounts? Include the revenue amount. Break ties alphabetically by city.",
+    "reference_sql": "SELECT c.city, ROUND(SUM(oi.quantity * oi.unit_price * (1 - oi.discount_pct)), 2) AS revenue FROM public.customers AS c JOIN public.orders AS o ON o.customer_id = c.customer_id JOIN public.order_items AS oi ON oi.order_id = o.order_id WHERE o.status = 'Completed' GROUP BY c.city ORDER BY revenue DESC, c.city ASC LIMIT 1",
+    "expected_result": {
+      "columns": [
+        "city",
+        "revenue"
+      ],
+      "rows": [
+        [
+          "Hanoi",
+          8299.85
+        ]
+      ]
+    },
+    "requires": [
+      "join",
+      "join_3",
+      "revenue",
+      "filter",
+      "group_by",
+      "sum",
+      "sorting",
+      "top_k",
+      "city"
+    ],
+    "numeric_tolerance": 0.01,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "strict",
+      "numeric_tolerance": 0.01,
+      "time_granularity": null,
+      "row_match": "prefix"
+    }
+  },
+  {
+    "id": "top_products_completed_revenue",
+    "category": "multi_join",
+    "difficulty": "hard",
+    "question": "What are the five highest-revenue products from completed orders after discounts? Include the revenue amounts. Break ties by product name, then category, alphabetically.",
+    "reference_sql": "SELECT p.product_name, p.category, ROUND(SUM(oi.quantity * oi.unit_price * (1 - oi.discount_pct)), 2) AS revenue FROM public.products AS p JOIN public.order_items AS oi ON oi.product_id = p.product_id JOIN public.orders AS o ON o.order_id = oi.order_id WHERE o.status = 'Completed' GROUP BY p.product_id, p.product_name, p.category ORDER BY revenue DESC, p.product_name ASC, p.category ASC LIMIT 5",
+    "expected_result": {
+      "columns": [
+        "product_name",
+        "category",
+        "revenue"
+      ],
+      "rows": [
+        [
+          "Standing Desk",
+          "Furniture",
+          12524.7
+        ],
+        [
+          "Office Chair",
+          "Furniture",
+          5379.3
+        ],
+        [
+          "Backpack",
+          "Accessories",
+          2445.87
+        ],
+        [
+          "Mechanical Keyboard",
+          "Electronics",
+          2269.93
+        ],
+        [
+          "Webcam",
+          "Electronics",
+          2203.4
+        ]
+      ]
+    },
+    "requires": [
+      "join",
+      "join_3",
+      "revenue",
+      "filter",
+      "group_by",
+      "sum",
+      "sorting",
+      "top_k",
+      "product"
+    ],
+    "numeric_tolerance": 0.01,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "strict",
+      "numeric_tolerance": 0.01,
+      "time_granularity": null,
+      "required_columns": [
+        "product_name",
+        "revenue"
+      ],
+      "row_match": "prefix"
+    }
+  },
+  {
+    "id": "completed_revenue_by_category",
+    "category": "multi_join",
+    "difficulty": "hard",
+    "question": "How much revenue did each product category earn from completed orders after discounts?",
+    "reference_sql": "SELECT p.category, ROUND(SUM(oi.quantity * oi.unit_price * (1 - oi.discount_pct)), 2) AS revenue FROM public.products AS p JOIN public.order_items AS oi ON oi.product_id = p.product_id JOIN public.orders AS o ON o.order_id = oi.order_id WHERE o.status = 'Completed' GROUP BY p.category ORDER BY revenue DESC, p.category ASC",
+    "expected_result": {
+      "columns": [
+        "category",
+        "revenue"
+      ],
+      "rows": [
+        [
+          "Furniture",
+          19925.17
+        ],
+        [
+          "Electronics",
+          8315.93
+        ],
+        [
+          "Accessories",
+          3444.12
+        ],
+        [
+          "Stationery",
+          585.62
+        ]
+      ]
+    },
+    "requires": [
+      "join",
+      "join_3",
+      "revenue",
+      "filter",
+      "group_by",
+      "sum",
+      "category"
+    ],
+    "numeric_tolerance": 0.01,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "unordered",
+      "numeric_tolerance": 0.01,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "customers_across_categories",
+    "category": "advanced",
+    "difficulty": "hard",
+    "question": "Which customers bought from more than two product categories in completed orders? Include the category count.",
+    "reference_sql": "SELECT c.customer_name, c.city, COUNT(DISTINCT p.category) AS category_count FROM public.customers AS c JOIN public.orders AS o ON o.customer_id = c.customer_id JOIN public.order_items AS oi ON oi.order_id = o.order_id JOIN public.products AS p ON p.product_id = oi.product_id WHERE o.status = 'Completed' GROUP BY c.customer_id, c.customer_name, c.city HAVING COUNT(DISTINCT p.category) > 2 ORDER BY category_count DESC, c.customer_name ASC, c.city ASC",
+    "expected_result": {
+      "columns": [
+        "customer_name",
+        "city",
+        "category_count"
+      ],
+      "rows": [
+        [
+          "Bui Ngoc Mai",
+          "Can Tho",
+          4
+        ],
+        [
+          "Chu Ngoc Han",
+          "Ho Chi Minh City",
+          4
+        ],
+        [
+          "Dinh Gia Bao",
+          "Hanoi",
+          4
+        ],
+        [
+          "Hoang Khanh Linh",
+          "Hai Phong",
+          4
+        ],
+        [
+          "Luong Khanh Vy",
+          "Hue",
+          4
+        ],
+        [
+          "Ly Bao Chau",
+          "Da Nang",
+          4
+        ],
+        [
+          "Mai Thu Trang",
+          "Ho Chi Minh City",
+          4
+        ],
+        [
+          "Phan Anh Tuan",
+          "Hanoi",
+          4
+        ],
+        [
+          "Ta Minh Quan",
+          "Da Nang",
+          4
+        ],
+        [
+          "Tran Quoc Bao",
+          "Ho Chi Minh City",
+          4
+        ],
+        [
+          "Trinh Hoang Son",
+          "Hai Phong",
+          4
+        ],
+        [
+          "Cao Duc Anh",
+          "Can Tho",
+          3
+        ],
+        [
+          "Dang Tuan Nam",
+          "Da Nang",
+          3
+        ],
+        [
+          "Do Phuong Thao",
+          "Hanoi",
+          3
+        ],
+        [
+          "Le Thu Ha",
+          "Da Nang",
+          3
+        ],
+        [
+          "Ngo Minh Khoa",
+          "Ho Chi Minh City",
+          3
+        ],
+        [
+          "Nguyen Minh Anh",
+          "Hanoi",
+          3
+        ],
+        [
+          "Pham Gia Huy",
+          "Hanoi",
+          3
+        ],
+        [
+          "Vo Duc Long",
+          "Ho Chi Minh City",
+          3
+        ],
+        [
+          "Vu Thanh Nga",
+          "Hue",
+          3
+        ]
+      ]
+    },
+    "requires": [
+      "join",
+      "join_4",
+      "distinct",
+      "filter",
+      "group_by",
+      "having",
+      "customer"
+    ],
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "unordered",
+      "numeric_tolerance": 0,
+      "time_granularity": null,
+      "required_columns": [
+        "customer_name",
+        "category_count"
+      ]
+    }
+  },
+  {
+    "id": "electronics_completed_revenue_by_city",
+    "category": "multi_join",
+    "difficulty": "hard",
+    "question": "How much completed-order revenue from Electronics came from each city after discounts?",
+    "reference_sql": "SELECT c.city, ROUND(SUM(oi.quantity * oi.unit_price * (1 - oi.discount_pct)), 2) AS revenue FROM public.customers AS c JOIN public.orders AS o ON o.customer_id = c.customer_id JOIN public.order_items AS oi ON oi.order_id = o.order_id JOIN public.products AS p ON p.product_id = oi.product_id WHERE o.status = 'Completed' AND p.category = 'Electronics' GROUP BY c.city ORDER BY revenue DESC, c.city ASC",
+    "expected_result": {
+      "columns": [
+        "city",
+        "revenue"
+      ],
+      "rows": [
+        [
+          "Hanoi",
+          2494.04
+        ],
+        [
+          "Ho Chi Minh City",
+          1825.97
+        ],
+        [
+          "Hue",
+          1286.2
+        ],
+        [
+          "Da Nang",
+          970.93
+        ],
+        [
+          "Hai Phong",
+          903.6
+        ],
+        [
+          "Can Tho",
+          835.2
+        ]
+      ]
+    },
+    "requires": [
+      "join",
+      "join_4",
+      "revenue",
+      "filter",
+      "multiple_conditions",
+      "group_by",
+      "sum",
+      "city",
+      "category"
+    ],
+    "numeric_tolerance": 0.01,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "unordered",
+      "numeric_tolerance": 0.01,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "top_category_per_city",
+    "category": "advanced",
+    "difficulty": "hard",
+    "question": "For each city, which product category had the most units on completed orders? Include the unit totals. If categories tie, choose the alphabetically first category.",
+    "reference_sql": "WITH city_categories AS (SELECT c.city, p.category, SUM(oi.quantity) AS units FROM public.customers AS c JOIN public.orders AS o ON o.customer_id = c.customer_id JOIN public.order_items AS oi ON oi.order_id = o.order_id JOIN public.products AS p ON p.product_id = oi.product_id WHERE o.status = 'Completed' GROUP BY c.city, p.category), ranked AS (SELECT city, category, units, ROW_NUMBER() OVER (PARTITION BY city ORDER BY units DESC, category ASC) AS rank_in_city FROM city_categories) SELECT city, category, units FROM ranked WHERE rank_in_city = 1 ORDER BY city ASC",
+    "expected_result": {
+      "columns": [
+        "city",
+        "category",
+        "units"
+      ],
+      "rows": [
+        [
+          "Can Tho",
+          "Electronics",
+          26
+        ],
+        [
+          "Da Nang",
+          "Furniture",
+          34
+        ],
+        [
+          "Hai Phong",
+          "Stationery",
+          23
+        ],
+        [
+          "Hanoi",
+          "Electronics",
+          66
+        ],
+        [
+          "Ho Chi Minh City",
+          "Electronics",
+          61
+        ],
+        [
+          "Hue",
+          "Electronics",
+          32
+        ]
+      ]
+    },
+    "requires": [
+      "join",
+      "join_4",
+      "filter",
+      "group_by",
+      "sum",
+      "sorting",
+      "multi_step",
+      "city",
+      "category"
+    ],
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "unordered",
+      "numeric_tolerance": 0,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "average_completed_order_value_by_city",
+    "category": "advanced",
+    "difficulty": "hard",
+    "question": "What was the average completed-order value in each city after discounts?",
+    "reference_sql": "WITH order_revenue AS (SELECT o.order_id, c.city, SUM(oi.quantity * oi.unit_price * (1 - oi.discount_pct)) AS revenue FROM public.customers AS c JOIN public.orders AS o ON o.customer_id = c.customer_id JOIN public.order_items AS oi ON oi.order_id = o.order_id WHERE o.status = 'Completed' GROUP BY o.order_id, c.city) SELECT city, ROUND(AVG(revenue), 2) AS average_order_value FROM order_revenue GROUP BY city ORDER BY average_order_value DESC, city ASC",
+    "expected_result": {
+      "columns": [
+        "city",
+        "average_order_value"
+      ],
+      "rows": [
+        [
+          "Can Tho",
+          228.89
+        ],
+        [
+          "Ho Chi Minh City",
+          180.22
+        ],
+        [
+          "Hanoi",
+          172.91
+        ],
+        [
+          "Hue",
+          145.66
+        ],
+        [
+          "Da Nang",
+          143.86
+        ],
+        [
+          "Hai Phong",
+          105.53
+        ]
+      ]
+    },
+    "requires": [
+      "join",
+      "join_3",
+      "revenue",
+      "filter",
+      "group_by",
+      "average",
+      "multi_step",
+      "city"
+    ],
+    "numeric_tolerance": 0.01,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "unordered",
+      "numeric_tolerance": 0.01,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "products_without_completed_orders",
+    "category": "multi_join",
+    "difficulty": "medium",
+    "question": "Which products have never appeared on a completed order?",
+    "reference_sql": "SELECT p.product_name, p.category FROM public.products AS p WHERE NOT EXISTS (SELECT 1 FROM public.order_items AS oi JOIN public.orders AS o ON o.order_id = oi.order_id WHERE oi.product_id = p.product_id AND o.status = 'Completed') ORDER BY p.product_name ASC, p.category ASC",
+    "expected_result": {
+      "columns": [
+        "product_name",
+        "category"
+      ],
+      "rows": []
+    },
+    "requires": [
+      "join",
+      "join_3",
+      "filter",
+      "zero_result"
+    ],
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "unordered",
+      "numeric_tolerance": 0,
+      "time_granularity": null,
+      "required_columns": [
+        "product_name"
+      ]
+    }
+  },
+  {
+    "id": "completed_revenue_share_by_category",
+    "category": "advanced",
+    "difficulty": "hard",
+    "question": "What percentage of completed-order revenue did each product category contribute after discounts? Include the revenue amounts and percentages.",
+    "reference_sql": "WITH category_revenue AS (SELECT p.category, SUM(oi.quantity * oi.unit_price * (1 - oi.discount_pct)) AS revenue FROM public.products AS p JOIN public.order_items AS oi ON oi.product_id = p.product_id JOIN public.orders AS o ON o.order_id = oi.order_id WHERE o.status = 'Completed' GROUP BY p.category) SELECT category, ROUND(revenue, 2) AS revenue, ROUND(100 * revenue / SUM(revenue) OVER (), 2) AS revenue_share_pct FROM category_revenue ORDER BY revenue_share_pct DESC, category ASC",
+    "expected_result": {
+      "columns": [
+        "category",
+        "revenue",
+        "revenue_share_pct"
+      ],
+      "rows": [
+        [
+          "Furniture",
+          19925.17,
+          61.74
+        ],
+        [
+          "Electronics",
+          8315.93,
+          25.77
+        ],
+        [
+          "Accessories",
+          3444.12,
+          10.67
+        ],
+        [
+          "Stationery",
+          585.62,
+          1.81
+        ]
+      ]
+    },
+    "requires": [
+      "join",
+      "join_3",
+      "revenue",
+      "filter",
+      "group_by",
+      "sum",
+      "multi_step",
+      "category"
+    ],
+    "numeric_tolerance": 0.01,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "unordered",
+      "numeric_tolerance": 0.01,
+      "time_granularity": null
+    }
+  }
+]

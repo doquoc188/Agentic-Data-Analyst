@@ -3,3 +3,6 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+eval/results/*.json
+eval/generalization/results/*.json
+runs/

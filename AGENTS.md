@@ -16,7 +16,16 @@ Do not replace it with an agent framework unless the user requests that phase.
 - `app/agent.py`: binds the four tools to Gemini, supplies system instructions,
   keeps the message list, dispatches every tool call, appends matching
   `ToolMessage` observations, and stops after at most eight model responses.
-  `python -m app.agent` accepts an optional question argument.
+  `python -m app.agent` accepts an optional question argument. Every run persists
+  an `AgentTrace` with model turns and tool calls before invocation,
+  with pending/success/error status and safe failure details. Model integration
+  failures retain an allowlisted phase/category/turn diagnostic, without raw errors.
+  Argument-schema errors become matching tool observations for model correction;
+  exceptions inside a tool still stop with a controlled failure.
+- `app/trace.py`: per-run trace records, UTC/monotonic timing, centralized
+  redaction, bounded result previews, atomic JSON persistence under Git-ignored
+  `runs/`, deterministic operation metrics, and a read-only developer trace reader.
+  It makes no extra model or database calls; persistence errors emit safe warnings.
 - `app/tools.py`: LangChain `@tool` implementations of `calculator`,
   `get_schema`, `describe_table`, and `execute_sql`.
 - `app/database.py`: reusable Psycopg 3 `get_connection()`; loads `.env` and
@@ -27,12 +36,44 @@ Do not replace it with an agent framework unless the user requests that phase.
   `sales` to four normalized tables. It creates constraints and grants SELECT.
 - `sql/02_verify_normalization.sql`: read-only counts, constraint, JOIN,
   revenue, row-matching, and role-privilege checks.
+- `sql/03_discount_semantics.sql`: owner-run column comments documenting
+  fractional discounts; installed and verified before the Phase 3.4.2 live run.
+- `eval/cases.json`: 24 deterministic analytics questions with separate
+  reference SQL, PostgreSQL-verified expected results, and comparison contracts.
+- `eval/README.md`: case format and ground-truth separation rules.
+- `eval/runner.py`: deterministic runner that sends questions to the agent,
+  re-executes selected supporting SQL read-only, and reports case/summary metrics.
+  Scalar comparisons are strict unless a case declares labeled-scalar support.
+  New reports link `run_id`/`trace_path` rather than copying tool-event arrays.
+- `eval/selection.py`: ground-truth-free answer-query selection heuristic;
+  uses distinct answer evidence, question overlap, then recency; unmentioned
+  result cells do not dilute support.
+- `eval/rescore.py`: offline rescoring of saved evidence; preserves the original
+  live results and labels changed questions. It calls neither Gemini nor PostgreSQL.
+- `eval/generalization/`: 16 separate SaaS cases (4 easy, 6 medium, 6 hard),
+  PostgreSQL-verified evaluator-only answers, and a direct Psycopg verifier.
+  It validates reference SELECT/WITH SQL, requires `analyst_agent` and the SaaS
+  database, sets READ ONLY/timeout on the cursor, and rolls back/closes safely.
+- `eval/generalization_runner.py`: reuses deterministic scoring/selection and
+  links persistent traces with `source="eval_generalization"`; questions alone
+  reach the agent. Results remain separate from the sales suite.
+- `sql/generalization/`: owner-run database/schema/data scripts and a read-only
+  verification report for the deterministic synthetic SaaS fixture.
 - `tests/test_agent.py`: mocked Gemini/agent registry and dispatch tests.
 - `tests/test_tools.py`: calculator tests and live local PostgreSQL tool tests.
+- `tests/test_eval_cases.py`: dataset format, coverage, and live read-only
+  PostgreSQL ground-truth validation. It does not call Gemini.
+- `tests/test_eval_runner.py`: offline runner and trace tests with fake agents.
+- `tests/test_trace.py`: fake-model persistence, timing, previews, redaction,
+  failure handling, evaluation linkage, and reader tests using temporary directories.
+- `tests/test_generalization.py`: suite coverage, prompt isolation, direct
+  verifier safety/lifecycle, tracing, environment override, and optional SaaS DB
+  checks enabled by `RUN_GENERALIZATION_DB_TESTS=1`.
+- `docs/tracing.md`: trace schema, storage, preview/security policy, and commands.
 - `requirements.txt`: LangChain, Gemini integration, python-dotenv, Psycopg 3.
 
-Use the code and SQL files as the source of truth. The current README has an
-outdated folder tree; `.env.example` is mentioned there but is not present.
+Use the code and SQL files as the source of truth. `.env` stays local; settings
+are documented by name, never by secret values.
 
 ## 3. Current Tool Set
 
@@ -40,7 +81,7 @@ outdated folder tree; `.env.example` is mentioned there but is not present.
 - `get_schema`: dynamically lists columns and types of public BASE TABLES
   using PostgreSQL `information_schema`; it does not hard-code table names.
 - `describe_table`: accepts a table name and describes public BASE TABLE
-  columns, data types, nullability, defaults, and PK/FK metadata.
+  columns, data types, nullability, defaults, column comments, and PK/FK metadata.
   It parameterizes table-name lookups; primary and foreign keys come from
   PostgreSQL constraint metadata, including ordered composite primary keys.
 - `execute_sql`: accepts one analytical SELECT or supported WITH query.
@@ -65,12 +106,19 @@ outdated folder tree; `.env.example` is mentioned there but is not present.
 - `orders`: original `order_id` PK; `customer_id` FK to `customers`; order
   date, payment method, and status.
 - `order_items`: `order_item_id` PK; `order_id` FK to `orders`, `product_id`
-  FK to `products`; quantity, transaction unit price, and discount percent.
+  FK to `products`; quantity, transaction unit price, and fractional discount
+  rate (`0.10` means 10%; revenue uses `1 - discount_pct`).
 
 The current import has one `order_items` row per `sales` row; the schema can
 hold multiple items per order later. The last verified counts were 20 customers,
 12 products, 300 orders, 300 order items, and 300 sales rows. Recheck live data
 before relying on these counts.
+
+The separate synthetic SaaS database is `agentic_analyst_saas`, also using public
+and `analyst_agent`. It contains accounts, plans, subscriptions, invoices, and
+support_tickets with PK/FK constraints and business-unit column comments. Switch
+databases with a process `DB_NAME` override, then restore it; `load_dotenv()`
+preserves process settings. Keep the primary `.env` DB_NAME unchanged.
 
 ## 5. Database Safety Invariants
 
@@ -86,20 +134,39 @@ before relying on these counts.
 10. Make schema changes reproducible in SQL files, not only in pgAdmin.
 11. Run administrative migrations separately as an authorized database owner;
     do not put admin credentials into application configuration.
+12. Keep run traces local and Git ignored. Persist at most 10 SQL row lines and
+    4,000 preview characters per tool result; redact secrets before serialization.
+    Never capture raw provider objects, exception messages, headers, environment
+    dumps, or evaluator ground truth in agent traces.
 
 ## 6. Agent Behavior Invariants
 
 - Never invent database tables, columns, relationships, or business results.
 - Use `get_schema` for an unfamiliar database structure.
 - Use `describe_table` when detailed table metadata or relationships are needed.
+- Ground unknown categorical/text filter literals in trusted metadata or bounded
+  read-only value queries. An inferred, unverified literal producing zero rows
+  or zero count needs grounding before a no-match conclusion. Reuse established
+  values; verified zero results remain valid without repeated inspection.
+- Follow trusted column comments for business units; avoid unnecessary table
+  descriptions, repeated checks, or reopening resolved assumptions without evidence.
 - Use `execute_sql` for real business results; do not fabricate query output.
-- After a SQL error, use metadata and observations to correct the query.
+- Treat SQL errors as observations; revise failed SQL before retrying, using
+  metadata when needed. Never repeat the exact failed query unchanged.
+- Treat argument-schema validation errors as observations with matching
+  `tool_call_id`; let the model repair arguments, never silently rename them.
+  Unexpected runtime exceptions remain controlled failures.
+- If reasonable correction attempts fail, explain that the query could not
+  be completed rather than inventing a result.
 - Let Gemini choose the necessary tools; do not force a fixed tool sequence.
 - Keep `calculator` available for arithmetic questions without database access.
 - Handle unknown tool requests gracefully and return an observation to Gemini.
 - Append the AI response before its tool observations; preserve each
   `tool_call_id`, including when one response contains multiple calls.
 - Keep a maximum model-response limit to prevent unbounded loops.
+- Conclude after sufficient successful evidence, including correctly filtered
+  empty results; reserve response budget for the final answer. Avoid redundant
+  sales cross-checks after a sufficient normalized result.
 
 ## 7. Completed Project Phases
 
@@ -117,14 +184,59 @@ before relying on these counts.
   a live agent JOIN question verified.
 - Phase 3.1: `describe_table` now reads primary-key columns from PostgreSQL
   catalogs under `analyst_agent`, preserving composite-key order and FK output.
+- Phase 3.2: Gemini receives SQL errors as tool observations and is instructed
+  to inspect metadata when needed, revise failed SQL, retry, and answer only
+  from successful results. The manual loop and eight-response limit remain.
+- Phase 3.3: 24 version-controlled evaluation questions with read-only
+  reference SQL, stored PostgreSQL results, and coverage/ground-truth tests.
+  The agent receives only the question in future evaluations.
+- Phase 3.4 CLOSED: deterministic evaluation runner, per-run agent trace,
+  read-only SQL re-execution, case comparisons, and aggregate metrics.
+  Final fresh baseline: 22/24 (91.67%), zero SQL execution errors, and live
+  argument-validation recovery verified. No further benchmark tuning is planned.
+- Phase 3.4.1: explicit strict/positional and ordered/unordered comparison
+  contracts, requested-field projection, month normalization, stated tie rules,
+  supporting-SQL selection, and failed-invocation traces. Metrics separate multiple
+  SQL calls from execution errors and recovery. Saved-run rescoring is not a new
+  live benchmark.
+- Phase 3.4.2 implementation complete: independent requested-field projection,
+  distinct answer-support SQL selection, explicit strict ranked-prefix contracts,
+  convergence/empty-result guidance, column-comment metadata, sanitized model
+  failures, and separate failure metrics. Discount comments are installed.
+  The subsequent fresh live run recorded 22/24 (91.67%).
+- Phase 3.4.3 implementation complete: recoverable argument-schema validation
+  observations, generic schema feedback, opt-in labeled-scalar comparison,
+  and separate validation-error/recovery metrics. Subsequent fresh verification
+  confirmed one validation error recovered in a passing case.
+- Phase 3.5 complete: persistent structured observability in `runs/`, ordered
+  model/tool/SQL timing, safe errors, bounded previews, deterministic metrics,
+  trace reader, and evaluation linkage. All 103 tests passed, including local
+  PostgreSQL checks. No Gemini calls or benchmark reruns during implementation;
+  prompt, eight-response limit, tools, and read-only protections are unchanged.
+- Phase 3.6 complete: the user installed the separate synthetic SaaS
+  migration; runtime schema/comments/PK/FK/read-only privileges and all 16
+  PostgreSQL reference results are verified. Direct verification parameterizes
+  privilege names without changing agent query safety. All 125 tests passed with
+  SaaS checks enabled. Agent prompt/tools and the sales benchmark are unchanged.
+  Official baselines: original sales **22/24 (91.67%)**, unseen SaaS
+  **14/16 (87.50%)**. The SaaS diagnostic found one categorical-value grounding
+  miss and one separate provider RESOURCE_EXHAUSTED interruption.
+- Phase 3.7 categorical grounding implemented: generic prompt guidance for exact
+  stored literals, targeted metadata/bounded value inspection, ungrounded-zero
+  checks, value reuse, and valid grounded zero conclusions. Fake-model tests
+  cover correction and convergence; all 129 tests passed with SaaS DB checks
+  enabled. Tools, tracing, loop, eight-response limit, provider policy, and both
+  benchmark suites are unchanged. Fresh live benchmark verification is pending.
 
 ## 8. Current Known Issue / Next Work
 
-**Next planned phase: 3.2.** SQL error recovery and self-correction/retry
-behavior. Wait for the user's phase requirements before implementing it.
+**Known limitations:** Provider RESOURCE_EXHAUSTED remains a separate failure
+mode; Phase 3.7 adds no provider retries. Prompt compliance and impact on live
+categorical-filter accuracy are unmeasured until fresh verification.
 
-Planned, not implemented: Phase 3.3 evaluation questions; Phase 3.4
-evaluation runner and metrics; Phase 3.5 traces and observability.
+**Next step: fresh unseen SaaS benchmark verification.** Wait for explicit user
+approval before calling Gemini. After that result is known, an original sales
+regression benchmark may be requested separately; do not run either automatically.
 
 ## 9. Scope Discipline
 
