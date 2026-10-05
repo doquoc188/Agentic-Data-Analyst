@@ -1,4 +1,5 @@
-# Backend only. Import this Blueprint manually when ready to deploy.
+# Primary backend deployment: source-based Render Free Python Web Service.
+# Import manually after Neon verification; Docker is optional local tooling.
 services:
   - type: web
     name: agentic-data-analyst-api

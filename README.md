@@ -223,11 +223,57 @@ The lockfile pins dependencies. The build checks TypeScript and writes `dist/`;
 dependencies, build output, local frontend environment files, and coverage are
 Git ignored. Manual cloud migration and deployment are the next step.
 
-## Public Deployment (Phase 4.4A)
+## Engineering tooling: optional backend Docker
+
+Docker provides reproducible backend packaging, local container execution, and
+portability if hosting changes. Render uses source-based Python deployment.
+The root Dockerfile packages only the Python backend, using
+`python:3.10.20-slim-bookworm` and a non-root user. Uvicorn listens on
+`0.0.0.0:${PORT:-8000}`; its shell uses `exec` to forward stop signals.
+The Python stdlib healthcheck calls only `/health`. The frontend stays separate.
+
+With Docker Desktop running in Linux-container mode:
+
+```powershell
+cd "D:\ReAct Agent"
+docker build -t agentic-data-analyst:local .
+docker run --rm -p 8000:8000 --env-file .env `
+    -e DB_HOST=host.docker.internal -e PORT=8000 `
+    -e TRACE_ENABLED=false -e TRACE_DIR=/app/runs `
+    -e ALLOWED_ORIGINS=http://localhost:5173 `
+    agentic-data-analyst:local
+```
+
+`--env-file .env` is for local testing only. It passes configuration at runtime;
+the Git-ignored `.env` is excluded from the build context and image. Inside
+Docker, `localhost` is the container: `host.docker.internal` reaches Windows
+host PostgreSQL without editing the normal local `.env`. Keep `DB_USER` on
+`analyst_agent`. Configured hosted URLs take precedence over local `DB_*` settings.
+
+In another terminal, make these configuration/liveness checks (no Gemini or DB calls):
+
+```powershell
+Invoke-RestMethod http://localhost:8000/health
+Invoke-RestMethod http://localhost:8000/ready
+Invoke-RestMethod http://localhost:8000/databases
+```
+
+Runtime settings are `GOOGLE_API_KEY`, `DATABASE_SALES_URL`,
+`DATABASE_SAAS_URL`, `ALLOWED_ORIGINS`, `TRACE_ENABLED`, `TRACE_DIR`, and `PORT`.
+Local PostgreSQL can use the existing `DB_*` fallback settings instead of URLs.
+The image defaults to port 8000, tracing disabled, and `/app/runs` as the writable
+trace directory. To enable local container tracing, replace the tracing flag with
+`-e TRACE_ENABLED=true -e TRACE_DIR=/app/runs`; files disappear with the container.
+See [the deployment guide](docs/deployment.md) for fake-config smoke tests and
+future cloud runtime settings. The Docker build and container checks are pending:
+Docker Desktop's engine was unavailable during this phase's verification.
+
+## Public Deployment Preparation
 
 **Preparation complete; not deployed.** The selected stack targets $0/month
 within provider free-tier limits: Vercel Hobby frontend, Render Free backend,
-two Neon Free databases, GitHub, and the existing Gemini Developer API.
+two Neon Free databases, and the existing Gemini Developer
+API. Confirm limits before provisioning; no cloud resources have been created.
 
 Follow [the manual deployment guide and checklist](docs/deployment.md) for
 exact PowerShell commands and credential-safe prompts:
@@ -240,14 +286,16 @@ exact PowerShell commands and credential-safe prompts:
    set its password interactively with `\password analyst_agent`, and run the
    metadata and permission verification scripts as `analyst_agent`. Use only
    this role's SSL-enabled connection URLs in application configuration.
-3. **Render:** connect the GitHub repo and review/import `render.yaml`. It
-   defines one Free Python backend, `/health`, the standard Uvicorn `$PORT`
-   command, dashboard-supplied secrets/origins, and `TRACE_ENABLED=false`.
-   `.python-version` pins the locally tested **3.10.20**. The Gemini model
-   stays **`gemini-3.5-flash-lite`**. No Render database is configured.
+3. **Render:** manually import/review `render.yaml` after Neon verification.
+   It defines one source-based Free Python Web Service: build
+   `pip install -r requirements.txt`, start
+   `uvicorn app.api:app --host 0.0.0.0 --port $PORT`, health `/health`.
+   Supply the Gemini key and restricted Neon URLs through Render environment
+   configuration. Production uses `TRACE_ENABLED=false`; no Render database
+   or Docker image publication is required.
 4. **Vercel:** connect the same repository with Root Directory `frontend`,
    framework Vite, Node 24.x, install `npm ci`, build `npm run build`, output
-   `dist`, and public `VITE_API_BASE_URL` set to the Render backend origin.
+   `dist`, and public `VITE_API_BASE_URL` set to the Render backend HTTPS origin.
    The one-page frontend needs no routing configuration or `vercel.json`.
 5. **CORS:** obtain the Vercel production origin, set Render `ALLOWED_ORIGINS`
    to that exact origin, and redeploy/restart the backend. Never use `*`.
@@ -255,9 +303,14 @@ exact PowerShell commands and credential-safe prompts:
    sales and SaaS question in the browser when ready to consume Gemini quota.
 
 Dump files and `.deployment-tmp/` are ignored. Never commit populated env files,
-credentials, or hosted URLs. Render Free storage is ephemeral: production
-traces are disabled, while local/eval tracing remains unchanged. Its cold starts
-use the existing generic UI hint; no keep-alive pings are added.
+credentials, or hosted URLs. Render Free storage is ephemeral: file
+traces are disabled, while local/eval tracing remains unchanged. Cold starts
+use the existing generic UI hint; no keep-alive pings are added. `render.yaml`
+is the primary backend deployment configuration. Docker remains optional tooling.
+The Gemini model remains `gemini-3.5-flash-lite`.
+
+**Next phase: manual Neon migration and read-only runtime-role verification.**
+Render/Vercel deployment remains a later manual step.
 
 ## Folder structure
 
@@ -307,9 +360,11 @@ ReAct Agent/
 │   └── deployment/        # Manual owner role setup + runtime verification
 ├── runs/                 # Local generated traces; ignored by Git
 ├── .gitignore
+├── .dockerignore
+├── Dockerfile
 ├── .env.example
 ├── .python-version
-├── render.yaml
+├── render.yaml           # Primary source-based Render backend deployment
 ├── requirements.txt
 └── README.md
 ```

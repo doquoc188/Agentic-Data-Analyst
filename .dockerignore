@@ -1,0 +1,9 @@
+# Allow only the backend build inputs. Everything else is excluded by default:
+# Git, all .env files, dumps/backups, .deployment-tmp, runs, frontend, tests,
+# eval, sql, docs, .tools, virtual/Conda environments, and build/cache artifacts.
+**
+!Dockerfile
+!.dockerignore
+!requirements.txt
+!app/
+!app/*.py

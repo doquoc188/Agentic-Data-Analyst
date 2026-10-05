@@ -1,21 +1,26 @@
-# Public deployment preparation (Phase 4.4A)
+# Public deployment preparation (Phase 4.4C)
 
-Prepared October 3, 2026. **No deployment or cloud migration has been executed.**
-Selected stack: Vercel Hobby (static frontend), Render Free Web Service (FastAPI),
-two Neon Free PostgreSQL projects, GitHub, and the existing Gemini Developer API.
+Updated October 4, 2026. **No deployment or cloud migration has been executed.**
+Selected stack: Vercel Hobby (React/Vite frontend), Render Free Web Service
+(FastAPI), two Neon Free PostgreSQL projects, GitHub, and the existing Gemini
+Developer API. `render.yaml` is the primary source-based backend configuration.
+Docker is optional tooling for reproducible packaging and local verification.
 The target is $0/month **within free-tier limits**, not an unconditional cost
-guarantee. Confirm dashboard plan/usage limits before provisioning. No paid
-compute, Render database, keep-alive pings, or cloud trace storage is configured.
+guarantee. Confirm dashboard plan/usage limits before provisioning. No cloud
+resources, keep-alive pings, or durable cloud trace storage are configured.
+**Next phase: manual Neon migration and read-only runtime-role verification**
+(sections 2–6). Render/Vercel deployment follows in a separately authorized phase.
 
 ## 1. Versions and unchanged application
 
-- Render Python: `.python-version` pins **3.10.20**, matching the tested Conda
-  `llm` environment and installed dependencies. Do not set a conflicting
-  `PYTHON_VERSION` in Render; it takes precedence over the file.
+- Backend Python: `.python-version` pins **3.10.20**, matching the tested Conda
+  `llm` environment. Render uses this file; do not set a conflicting
+  `PYTHON_VERSION`, which takes precedence. The optional Dockerfile uses
+  `python:3.10.20-slim-bookworm`, without Conda.
 - Vercel Node: select **24.x**, matching the local frontend's Node 24 major.
 - Gemini model remains **`gemini-3.5-flash-lite`**, temperature 0.
-- `requirements.txt` remains unpinned; inspect the eventual Render build log
-  for resolved dependencies. Passing local tests is not a hosted build check.
+- `requirements.txt` remains unpinned; inspect Render build logs for resolved
+  dependencies. Passing local tests does not verify a hosted installation.
 - Agent loop, tools, SQL protections, local tracing, and profiles are unchanged.
 
 ## 2. Create two Neon projects manually
@@ -28,7 +33,7 @@ hosted URL, so hosted names need not match the local names.
 Record each project's database name, owner role, and **direct/unpooled** host
 privately. Use direct connections for these tiny demos and migration commands;
 no connection pool is needed. Keep the owner's credentials only for migration,
-never in Render or the frontend. Do not restore into a database with unrelated
+never in the application runtime or frontend. Do not restore into a database with unrelated
 objects. Source databases are `agentic_analyst` and `agentic_analyst_saas`.
 
 ## 3. Export local public schemas manually
@@ -197,74 +202,88 @@ characters if constructing a URL manually. Only a placeholder belongs in docs:
 postgresql://analyst_agent:<URL-encoded-runtime-password>@<direct-neon-host>:5432/<database>?sslmode=require&channel_binding=require
 ```
 
-Paste the sales URL into Render's `DATABASE_SALES_URL` and the SaaS URL into
-`DATABASE_SAAS_URL`, never GitHub, frontend environment variables, or logs. Verify
+Later supply the sales URL as Render's `DATABASE_SALES_URL` and the SaaS URL as
+`DATABASE_SAAS_URL` through private environment settings, never GitHub, frontend
+variables, or logs. Verify
 the URL role is `analyst_agent`; never substitute the owner to bypass a failure.
 Keep the local `.env` unchanged. No `DB_*` fallback values are needed on Render
 when both hosted URLs are configured.
 
-## 7. Render backend — manual dashboard deployment
+## 7. Render backend — manual source-based deployment
 
-After Neon verification, commit/review only intended files and push to GitHub
-without dumps, traces, secrets, or generated builds. Connect that repository in
-Render and import root `render.yaml` as a Blueprint. Review that it creates
-**one Python Web Service on Free**, with no Render database or disk:
+After Neon verification, review/commit only intended files and push to GitHub
+without secrets, dumps, traces, or generated builds. Connect the repository in
+Render and review/import root `render.yaml`. It defines **one Free Python Web
+Service**, with no Render database or disk. Docker is optional local tooling;
+the production service installs dependencies directly from source.
 
 | Setting | Value |
 | --- | --- |
 | Root directory | Repository root (leave blank) |
+| Runtime / plan | Python / Free |
 | Build | `pip install -r requirements.txt` |
 | Start | `uvicorn app.api:app --host 0.0.0.0 --port $PORT` |
 | Python | `3.10.20` from `.python-version` |
 | Health check | `/health` |
-| Automatic deploy trigger | Off; subsequent deploys are manual |
+| Automatic deploy trigger | Off; later deploys are manual |
 
-Provide `GOOGLE_API_KEY` and the two **restricted** hosted URLs at the dashboard
-prompts. Set initial `ALLOWED_ORIGINS` empty if permitted; otherwise use only
-`http://localhost:5173` temporarily. Replace it with the exact Vercel production
-origin after frontend deployment. `sync: false` prevents values being committed;
-new keys added to an existing Blueprint must be entered manually in Render.
+Set these environment values privately in Render:
 
-`TRACE_ENABLED=false` is fixed in the Blueprint. Render Free storage is
-ephemeral; API answers still have run IDs but `trace_path` is null. Local/eval
-tracing remains enabled by its normal configuration. Do not add a persistent
-disk or rely on `runs/` surviving production restarts. `/health` is liveness;
-`/ready` checks configuration only, not DB connectivity or Gemini quotas.
+| Variable | Value to supply |
+| --- | --- |
+| `GOOGLE_API_KEY` | Existing Gemini key |
+| `DATABASE_SALES_URL` | Restricted sales Neon URL with required SSL options |
+| `DATABASE_SAAS_URL` | Restricted SaaS Neon URL with required SSL options |
+| `ALLOWED_ORIGINS` | Initially empty, or `http://localhost:5173` for an approved local check; finalize in section 9 |
+| `TRACE_ENABLED` | `false`, already configured in the Blueprint |
 
-Deploy manually and record its HTTPS backend origin privately for frontend
-configuration. Render supplies `PORT`; do not use PowerShell `$env:PORT` in
-the Linux start command. Free-service sleep is expected: leave the existing
-generic slow-server hint, and do not add artificial keep-alive traffic.
+The `sync: false` entries prompt for values during initial Blueprint creation.
+For an existing service, enter new settings manually in its dashboard. No
+populated `.env` is uploaded. Render supplies PORT; the Linux start command uses
+`$PORT`, not PowerShell `$env:PORT`. TRACE_DIR is optional and defaults to `runs/`,
+but production file tracing is disabled on Render's ephemeral filesystem.
+Responses retain run IDs and have null trace_path; local/eval tracing is unchanged.
 
-## 8. Vercel frontend and exact CORS order
+Deploy manually only when authorized, then record the backend HTTPS origin for
+Vercel configuration. `/health` is liveness; `/ready` checks configuration only,
+not database connectivity or Gemini quota. Cold starts are expected; retain the
+existing UI hint without keep-alive traffic. Review current Free plan limits
+before deployment. No Render resource has been created during this cleanup.
 
-1. Deploy the Render backend initially and obtain its HTTPS origin.
-2. Import the same GitHub repository into Vercel on Hobby. Set **Root Directory
+## 8. Vercel frontend — manual deployment
+
+After the Render backend has its HTTPS origin:
+
+1. Import the same GitHub repository into Vercel on Hobby. Set **Root Directory
    `frontend`**, **Framework Vite**, **Node 24.x**, **Install `npm ci`**,
    **Build `npm run build`**, **Output `dist`**.
-3. Set production `VITE_API_BASE_URL` to the Render backend origin, then deploy.
-   Vite embeds this public URL at build time; changes require a fresh build.
-4. Obtain the final Vercel production origin (`https://<project>.vercel.app`,
-   without a path or trailing slash).
-5. Set Render `ALLOWED_ORIGINS` to that **exact** origin. For multiple approved
-   origins, use an explicit comma-separated list; never use `*` or a wildcard
-   preview-domain pattern. Preview origins are not automatically trusted.
-6. Manually redeploy/restart the backend so its CORS configuration is refreshed.
-7. Test from the production frontend in the browser, including CORS preflight.
+2. Set production `VITE_API_BASE_URL` to the Render backend HTTPS origin, then
+   deploy. Vite embeds this public URL at build time; changes require a fresh build.
+3. Record the final Vercel production origin (`https://<project>.vercel.app`,
+   without a path or trailing slash) for the CORS update below.
 
 The frontend has one page with hash anchors and no React Router paths.
 No `vercel.json`, route fallback, serverless functions, or router is needed.
 Only `VITE_API_BASE_URL` belongs in Vercel's frontend environment. Do not import
 backend env files or expose Gemini keys, hosted DB URLs, or owner credentials.
+No Vercel deployment has been executed during this cleanup.
 
-## 9. Manual smoke test and release checklist
+## 9. Final CORS update
+
+Set Render `ALLOWED_ORIGINS` to the **exact** Vercel production origin. For
+multiple approved origins, use an explicit comma-separated list; never use `*`
+or a wildcard preview-domain pattern. Preview origins are not automatically
+trusted. Manually redeploy/restart the backend to refresh startup CORS settings,
+then test from the production frontend, including CORS preflight.
+
+## 10. Public smoke test and release checklist
 
 - [ ] Both Neon metadata and role scripts pass under `analyst_agent`; comments
       and required PK/FKs/indexes are reviewed.
-- [ ] Render is Free, uses pinned Python, restricted URLs, exact origins, and
-      disabled production file traces; logs contain no credential URLs.
+- [ ] Render uses the Free Python plan, pinned Python, restricted URLs, exact
+      origins, and disabled file traces; logs contain no credential URLs.
 - [ ] `GET /health` returns 200, `/ready` returns 200, and `/databases` contains
-      only public sales/saas display metadata. These checks make no Gemini calls.
+      only public sales/saas display metadata. These checks make no Gemini/DB calls.
 - [ ] Vercel production is built with the correct HTTPS API URL; inspect the
       bundle/env settings for server credentials before sharing the demo.
 - [ ] Open the public frontend: both datasets load; light/dark/mobile UI works.
@@ -274,22 +293,73 @@ backend env files or expose Gemini keys, hosted DB URLs, or owner credentials.
 - [ ] Verify exact-origin CORS, friendly error/retry behavior, and the cold-start
       hint. No server trace paths, raw errors, or fake execution data appear.
 - [ ] Record actual hosting URLs and live smoke-test results privately. Share
-      the public frontend only after the checks pass; do not publish owner URLs.
+      the public frontend only after the checks pass; never publish owner URLs.
 
-Preparation checks (no Gemini calls):
+These are future manual checks. This cleanup makes no Gemini calls, changes no
+databases, and creates no cloud resources. No authentication, streaming, provider
+retries, or benchmark tuning are added.
+
+## 11. Optional Docker local verification
+
+Docker retains a reproducible backend runtime and future hosting portability.
+It is independent of the selected source-based Render deployment. Dockerfile
+and .dockerignore remain unchanged from Phase 4.4B: official Python 3.10.20 slim,
+existing requirements, non-root UID/GID 10001, readable root-owned code, and
+writable `/app/runs`. The build allowlist includes only Docker files,
+requirements.txt, and current app/*.py; secrets, Git, dumps, traces, frontend,
+tests/eval/SQL/docs, caches, and environments are excluded.
+
+With Docker Desktop running in Linux-container mode:
 
 ```powershell
-conda activate llm
-$env:RUN_GENERALIZATION_DB_TESTS = '1'
-python -m unittest discover -s tests -v
-cd frontend
-npm run test
-npm run build
+cd "D:\ReAct Agent"
+docker build -t agentic-data-analyst:local .
+docker run --rm -p 8000:8000 --env-file .env `
+    -e DB_HOST=host.docker.internal -e PORT=8000 `
+    -e TRACE_ENABLED=false -e TRACE_DIR=/app/runs `
+    -e ALLOWED_ORIGINS=http://localhost:5173 `
+    agentic-data-analyst:local
 ```
 
-Provider provisioning, restore, privilege probes, and live public smoke tests
-are pending manual actions. No rate limiter/authentication/streaming or provider
-retry policy is added in this phase.
+`--env-file .env` is local runtime configuration only; the file stays Git ignored
+and outside the image. `host.docker.internal` reaches Windows host PostgreSQL
+without editing the normal local `.env`; retain `analyst_agent`. Hosted profile
+URLs override local DB_* settings. Inside Docker, localhost is the container.
+
+In another terminal, check only the GET endpoints below. They do not call Gemini
+or PostgreSQL; /ready checks configuration, not connectivity. Do not POST /query
+during container verification.
+
+```powershell
+Invoke-RestMethod http://localhost:8000/health
+Invoke-RestMethod http://localhost:8000/ready
+Invoke-RestMethod http://localhost:8000/databases
+docker image ls agentic-data-analyst:local
+docker history agentic-data-analyst:local
+```
+
+After a successful build, check non-root execution, exclusions, and writable
+traces without providing credentials:
+
+```powershell
+docker run --rm --entrypoint python agentic-data-analyst:local -c "import os, pathlib, tempfile; assert os.getuid() == 10001; assert not any(pathlib.Path(p).exists() for p in ('/app/.env', '/app/.git', '/app/frontend', '/app/tests', '/app/eval', '/app/sql')); tempfile.TemporaryFile(dir='/app/runs').close(); print('Non-root, exclusions, trace directory: PASS')"
+```
+
+Stop the foreground server with Ctrl+C; --rm removes the container. For optional
+local tracing, use `-e TRACE_ENABLED=true -e TRACE_DIR=/app/runs`; any other
+TRACE_DIR must be writable by UID 10001. Files are not durable and disappear with
+the container. Never dump runtime environment variables containing secrets.
+
+The image starts Uvicorn with exec on `${PORT:-8000}` and a stdlib /health
+HEALTHCHECK; no reload or extra dependency. A custom PORT requires matching
+Docker port mapping. Its defaults are PORT=8000 and TRACE_ENABLED=false.
+
+**Verification status:** Phase 4.4B passed 161 backend tests with SaaS checks
+but could not build/run the image because Docker Desktop's Linux engine was
+unavailable. Container startup, health/user/trace checks, layers, and size remain
+unverified. Phase 4.4C changes only docs and Render comments; static checks confirm
+Docker configuration is intact. Full Python/frontend regression was not required
+or rerun for this cleanup.
 
 ## Official references
 
@@ -302,3 +372,6 @@ retry policy is added in this phase.
   [Neon migration tooling](https://neon.com/tools).
 - [PostgreSQL 18 pg_dump](https://www.postgresql.org/docs/18/app-pgdump.html),
   [pg_restore](https://www.postgresql.org/docs/18/app-pgrestore.html).
+- [Dockerfile reference](https://docs.docker.com/reference/dockerfile/),
+  [build context](https://docs.docker.com/build/concepts/context/),
+  [Docker Desktop host networking](https://docs.docker.com/desktop/features/networking/networking-how-tos/).

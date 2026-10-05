@@ -10,12 +10,18 @@ User → Gemini → manual LangChain tool-calling loop → Python tools → Post
 
 Product direction: a public synthetic-data web demo, targeting $0/month
 infrastructure within free-tier limits. The selected deployment stack is Vercel
-Hobby, Render Free Web Service, and two Neon Free PostgreSQL projects, with GitHub
-and the existing Gemini Developer API. Deployment has not been executed; keep
-the agent core cloud-provider agnostic.
+Hobby, Render Free Web Service, and two Neon Free PostgreSQL projects, with
+GitHub and the existing Gemini Developer API. Docker is retained for reproducible
+backend packaging, optional local verification, and future hosting portability.
+Render uses source-based Python deployment. GitHub Actions is deferred.
+Deployment has not been executed; keep the agent core cloud-provider agnostic.
 
 The loop is implemented by hand to show tool binding, calls, execution, and observations.
 Do not replace it with an agent framework unless the user requests that phase.
+
+LangChain remains core and already used. MCP is planned later only as a meaningful
+interoperability layer. LangGraph remains optional; add it only when a requested
+phase has a clear need, never for a technology keyword.
 
 ## 2. Current Architecture
 
@@ -96,12 +102,22 @@ Do not replace it with an agent framework unless the user requests that phase.
   verifier safety/lifecycle, tracing, environment override, and optional SaaS DB
   checks enabled by `RUN_GENERALIZATION_DB_TESTS=1`.
 - `docs/tracing.md`: trace schema, storage, preview/security policy, and commands.
-- `docs/deployment.md`: manual Neon export/restore/role checks and Render/Vercel
-  deployment order. `sql/deployment/` contains owner-run runtime-role setup and
-  separate runtime metadata/permission verification, never automatic migrations.
-- `render.yaml`: one Free Python web backend, manual deploy trigger, /health,
-  dashboard-supplied configuration, and hosted TRACE_ENABLED=false. No database
-  or disk is provisioned. `.python-version` pins locally tested Python 3.10.20.
+- `docs/deployment.md`: manual Neon export/restore/role checks, Render/Vercel
+  deployment order, final CORS/smoke checks, and optional local Docker verification.
+  `sql/deployment/` contains
+  owner-run runtime-role setup and separate runtime metadata/permission
+  verification, never automatic migrations.
+- `Dockerfile` / `.dockerignore`: backend-only official Python 3.10.20 slim image,
+  existing pip requirements, non-root UID/GID 10001, root-owned readable code,
+  writable `/app/runs`, and runtime-only secret configuration. Uvicorn binds
+  0.0.0.0 on PORT (default 8000), with exec for signals and stdlib /health checking.
+  Tracing defaults off in the image. Build context permits only Docker files,
+  requirements.txt, and current app/*.py; update deliberately for future subpackages.
+- `render.yaml`: primary source-based Free Python Web Service configuration,
+  existing pip build/Uvicorn $PORT startup, /health, manual deploy trigger,
+  dashboard-supplied settings, and TRACE_ENABLED=false. No Render database or
+  disk is configured. `.python-version` pins locally tested Python 3.10.20,
+  also used by the optional Dockerfile.
 - `frontend/`: separate React/TypeScript/Vite/Tailwind public query page, native
   dataset controls, examples, responsive light/dark layout, and safe result UX.
   `src/api/client.ts` centralizes typed fetch calls and strips server trace paths;
@@ -192,8 +208,9 @@ per-request environment override. Keep the primary `.env` DB_NAME unchanged.
     credentialed CORS. CORS does not replace authentication or database permissions.
 16. Neon runtime roles must be created through SQL without admin memberships,
     ownership, write/CREATE/TEMP privileges, or grant options. Never use a Neon
-    owner URL in Render. Run migrations manually as the owner, then verify using
-    a direct analyst_agent login. Keep migration archives/reports Git ignored.
+    owner URL in the hosted application. Run migrations manually as the owner,
+    then verify using a direct analyst_agent login. Keep migration archives/reports
+    Git ignored.
 
 ## 6. Agent Behavior Invariants
 
@@ -315,6 +332,21 @@ per-request environment override. Keep the primary `.env` DB_NAME unchanged.
   All 161 backend tests passed with SaaS checks enabled; 20 frontend tests and
   production build passed. Model remains gemini-3.5-flash-lite. No application
   behavior changes, Gemini calls, cloud resources, migrations, or DB changes.
+- Phase 4.4B Dockerization implementation complete: backend-only Dockerfile and
+  strict context allowlist, non-root runtime, PORT-aware Uvicorn, stdlib liveness
+  healthcheck, and writable optional local traces. All 161 backend tests passed
+  with SaaS DB checks enabled.
+  Docker Desktop's Linux engine was unavailable: image build, container smoke
+  checks, runtime permissions, layer inspection, and size remain unverified.
+  Application code/dependencies, frontend, and Gemini model are unchanged.
+  No Gemini calls, cloud resources, pushes, deployment, or database changes.
+- Phase 4.4C deployment architecture cleanup complete: Vercel frontend, source-based
+  Render Free backend, and two Neon PostgreSQL projects. Docker is retained as
+  reproducible packaging and optional local verification. Azure removed; GHCR
+  removed from the required architecture; Kubernetes is out of scope.
+  Only docs and Render comments changed; Docker files, application, frontend,
+  and SQL scripts are unchanged. Static checks passed; full regression was not
+  required. No Gemini calls, deployments, cloud resources, or database changes.
 
 ## 8. Current Known Issue / Next Work
 
@@ -325,16 +357,20 @@ authentication, or streaming; trace persistence failure yields a null
 trace_path without replacing the answer. /ready checks configuration, not live
 connectivity or quotas. Ephemeral storage may lose traces; no durable cloud trace
 storage is implemented. The selected free-tier stack has not been deployed or
-verified as a live $0/month demo. Production TRACE_ENABLED=false is configured
-for Render's ephemeral filesystem; local/evaluation traces remain unchanged.
+verified as a live $0/month demo. The container defaults to TRACE_ENABLED=false
+for ephemeral storage; Render also configures TRACE_ENABLED=false.
+Local/evaluation traces remain unchanged. Docker build and container smoke
+verification are pending because Docker Desktop's Linux engine was unavailable.
 
 The frontend has mocked API verification and a production build; a live
 Gemini-through-browser demo has not been run. It is not publicly deployed.
 
-**Next step: manual Neon migration and Render/Vercel deployment.** The user
+**Next phase: manual Neon migration and read-only runtime-role verification.** The user
 performs account/secret-sensitive steps from docs/deployment.md after review.
 Use restricted analyst_agent URLs, retain SSL options, finalize exact Vercel
-CORS origins, and verify live smoke tests separately. Do not create resources,
+CORS origins, and verify live smoke tests separately. Complete local Docker
+verification when the engine is available; Render/Vercel
+deployment remain later, separately authorized steps. Do not create resources,
 migrate databases, deploy, call Gemini, or rerun benchmarks automatically.
 
 ## 9. Scope Discipline
