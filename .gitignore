@@ -20,3 +20,5 @@ frontend/coverage/
 .deployment-tmp/
 *.dump
 *.backup
+
+.vscode/
