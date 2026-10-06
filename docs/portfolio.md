@@ -1,11 +1,25 @@
 # Portfolio evidence
 
-Capture real results from the deployed web demo and the local MCP Inspector.
-This guide does not supply screenshots or require image commits. No screenshot
-assets currently exist; add only reviewed, sanitized captures when available.
+Five real screenshots supplied by the maintainer are included unchanged under
+`docs/assets/` and displayed in the [README](../README.md#demo). Visual review
+found no visible credentials, connection URLs, or Inspector session tokens.
 The [web walkthrough](demo.md) and [verified MCP walkthrough](mcp-demo.md) provide
 the demonstration steps. Fresh web submissions call Gemini; capture them only
 when the maintainer chooses to run live checks.
+
+## Included captures
+
+| File | Visible evidence |
+| --- | --- |
+| [web-overview.png](assets/web-overview.png) | Production interface with Sales Analytics selected |
+| [sales-query.png](assets/sales-query.png) | Completed Sales answer for revenue by city |
+| [saas-query.png](assets/saas-query.png) | Completed SaaS answer for current MRR by plan |
+| [mcp-tools.png](assets/mcp-tools.png) | Connected Inspector, four tools, and sales/saas choices |
+| [mcp-readonly-security.png](assets/mcp-readonly-security.png) | Query result showing analyst_agent and transaction_read_only=on |
+
+The security capture does not show the selected profile or DELETE rejection;
+do not caption it as evidence of both profiles or write denial. The user-verified
+write rejection remains documented in [the MCP walkthrough](mcp-demo.md#verified-results).
 
 ## Recommended screenshot set
 
@@ -36,4 +50,4 @@ are a separate protection, and this DELETE request never reaches PostgreSQL.
 
 Review every image before publishing. Keep raw screenshots or exports containing
 private information outside the repository; screenshot collection is optional
-and does not block the documentation release candidate.
+for future presentation updates.

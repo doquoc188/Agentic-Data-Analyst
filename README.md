@@ -15,9 +15,17 @@ Both production datasets have been verified end-to-end by the maintainer.
 The backend root is not the demo page; use the frontend to ask questions.
 See the [short demo walkthrough](docs/demo.md).
 
-**v1.0.0 release candidate:** functionally complete; final diff review, release
-checks, commit, and tag remain manual. See the [release checklist](docs/release-checklist.md)
-and [release notes](docs/release-notes-v1.0.0.md).
+<p align="center">
+  <a href="docs/assets/web-overview.png"><img src="docs/assets/web-overview.png" width="640" alt="Agentic Data Analyst production web interface with Sales Analytics selected"></a>
+  <br>Production web interface with Sales Analytics selected.
+</p>
+
+**v1.0.0 released.** See the [release notes](docs/release-notes-v1.0.0.md)
+and [release checklist](docs/release-checklist.md).
+
+[Architecture](#architecture) · [Benchmarks](#official-benchmarks) ·
+[Demo](#demo) · [Safety](#safety-model) · [MCP](#mcp-interface) ·
+[Local setup](#local-development)
 
 ## Architecture
 
@@ -73,6 +81,26 @@ for every live answer. See [evaluation details](#evaluation).
 | `get_schema` | Discover public base tables, column names, and data types |
 | `describe_table` | Inspect columns, primary/foreign keys, defaults, and semantic comments |
 | `execute_sql` | Execute one guarded read-only analytical SELECT or supported WITH query |
+
+## Demo
+
+Real production screenshots supplied by the maintainer. Select an image to view
+it at full size; these examples do not replace the official benchmark scores.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/assets/sales-query.png"><img src="docs/assets/sales-query.png" width="400" alt="Sales Analytics completed answer naming Hanoi as the city with the most completed-order revenue"></a><br>
+      <strong>Sales analytics</strong><br>
+      Completed-order revenue by city, answered in natural language.
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/assets/saas-query.png"><img src="docs/assets/saas-query.png" width="400" alt="SaaS Analytics completed answer naming Enterprise as the plan with the highest current MRR"></a><br>
+      <strong>SaaS analytics</strong><br>
+      The same core agent on a different PostgreSQL schema: current MRR by plan.
+    </td>
+  </tr>
+</table>
 
 ## Technology
 
@@ -137,6 +165,20 @@ machine-facing read-only tool interface. The user verified MCP interoperability
 with Inspector 2.9.0: both live datasets, schema/table metadata, analyst_agent in
 READ ONLY transactions, Sales count 300, SaaS subscriptions count 120, and write
 rejection. No Gemini was involved. See the [verified MCP demo](docs/mcp-demo.md).
+
+<p align="center">
+  <a href="docs/assets/mcp-tools.png"><img src="docs/assets/mcp-tools.png" width="720" alt="Connected MCP Inspector listing list_database_profiles, get_schema, describe_table, and execute_sql with sales and saas profile choices"></a>
+</p>
+
+MCP Inspector discovering the four read-only analytical tools.
+
+<p align="center">
+  <a href="docs/assets/mcp-readonly-security.png"><img src="docs/assets/mcp-readonly-security.png" width="720" alt="MCP execute_sql result showing current_user analyst_agent and transaction_read_only on"></a>
+</p>
+
+MCP query result: `current_user = analyst_agent` and `transaction_read_only = on`.
+This screenshot shows the runtime role and transaction setting; write rejection
+is recorded separately in the verified walkthrough above.
 
 ## Safety model
 
