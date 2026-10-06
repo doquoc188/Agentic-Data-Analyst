@@ -14,7 +14,10 @@ Hobby, Render Free Web Service, and two Neon Free PostgreSQL projects, with
 GitHub and the existing Gemini Developer API. Docker is retained for reproducible
 backend packaging, optional local verification, and future hosting portability.
 Render uses source-based Python deployment. GitHub Actions is deferred.
-Deployment has not been executed; keep the agent core cloud-provider agnostic.
+Production is deployed and maintainer-verified end-to-end for Sales and SaaS:
+frontend https://agentic-data-analyst-nine.vercel.app;
+backend https://agentic-data-analyst-api.onrender.com (checks /health and /ready).
+Keep the agent core cloud-provider agnostic; preserve working production behavior.
 
 The loop is implemented by hand to show tool binding, calls, execution, and observations.
 Do not replace it with an agent framework unless the user requests that phase.
@@ -102,6 +105,9 @@ phase has a clear need, never for a technology keyword.
   verifier safety/lifecycle, tracing, environment override, and optional SaaS DB
   checks enabled by `RUN_GENERALIZATION_DB_TESTS=1`.
 - `docs/tracing.md`: trace schema, storage, preview/security policy, and commands.
+- `docs/architecture.md`: request routing, manual tool loop, profile isolation,
+  security boundaries, deterministic evaluation, and observability.
+- `docs/demo.md`: live-demo walkthrough and suggested Sales/SaaS questions.
 - `docs/deployment.md`: manual Neon export/restore/role checks, Render/Vercel
   deployment order, final CORS/smoke checks, and optional local Docker verification.
   `sql/deployment/` contains
@@ -347,6 +353,15 @@ per-request environment override. Keep the primary `.env` DB_NAME unchanged.
   Only docs and Render comments changed; Docker files, application, frontend,
   and SQL scripts are unchanged. Static checks passed; full regression was not
   required. No Gemini calls, deployments, cloud resources, or database changes.
+- Production deployment complete (maintainer-verified): Vercel frontend, Render
+  FastAPI backend, and Neon Sales + SaaS. Both datasets' production queries work.
+  Official baselines remain Sales 22/24 (91.67%) and SaaS 14/16 (87.50%).
+- Phase 4 Final Polish complete: README, architecture, demo, and deployment docs
+  finalized; current production links/status and safety/evaluation limits recorded.
+  Existing offline pytest: 142 passed, 19 live DB tests deselected to honor this
+  phase's no-DB-access constraint. npm ci and frontend production build passed.
+  No application/deployment behavior, dependencies, benchmarks, or schemas changed;
+  no Gemini calls, DB connections/changes, cloud changes, commits, or pushes.
 
 ## 8. Current Known Issue / Next Work
 
@@ -356,22 +371,25 @@ separate failure mode; there are no provider retries. The backend has no session
 authentication, or streaming; trace persistence failure yields a null
 trace_path without replacing the answer. /ready checks configuration, not live
 connectivity or quotas. Ephemeral storage may lose traces; no durable cloud trace
-storage is implemented. The selected free-tier stack has not been deployed or
-verified as a live $0/month demo. The container defaults to TRACE_ENABLED=false
-for ephemeral storage; Render also configures TRACE_ENABLED=false.
+storage is implemented. The live Vercel/Render/Neon demo is maintainer-verified
+for Sales and SaaS; $0/month remains a target within allowances, not audited billing.
+The container defaults to TRACE_ENABLED=false for ephemeral storage; Render also
+configures TRACE_ENABLED=false.
 Local/evaluation traces remain unchanged. Docker build and container smoke
 verification are pending because Docker Desktop's Linux engine was unavailable.
 
-The frontend has mocked API verification and a production build; a live
-Gemini-through-browser demo has not been run. It is not publicly deployed.
+The production frontend/backend URLs are listed in section 1. Production
+end-to-end verification was supplied by the maintainer; final polish did not
+repeat live checks. Do not replace official scores with diagnostic rescoring.
 
-**Next phase: manual Neon migration and read-only runtime-role verification.** The user
-performs account/secret-sensitive steps from docs/deployment.md after review.
-Use restricted analyst_agent URLs, retain SSL options, finalize exact Vercel
-CORS origins, and verify live smoke tests separately. Complete local Docker
-verification when the engine is available; Render/Vercel
-deployment remain later, separately authorized steps. Do not create resources,
-migrate databases, deploy, call Gemini, or rerun benchmarks automatically.
+**Next planned phase: MCP integration**, only as a meaningful interoperability
+layer when explicitly requested. Preserve the manual agent, prompt, eight-response
+limit, tools, profile routing, SQL protections, API, and frontend behavior unless
+the user requests a behavior change. Docker runtime verification remains optional
+and pending. Runtime Neon URLs use restricted analyst_agent access and retain SSL
+options; deployed ALLOWED_ORIGINS should contain the exact Vercel frontend origin.
+Do not create resources, migrate databases, redeploy, call Gemini, or rerun live
+benchmarks automatically.
 
 ## 9. Scope Discipline
 

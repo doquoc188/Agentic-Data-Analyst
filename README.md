@@ -1,370 +1,282 @@
 # Agentic Data Analyst
 
-Agentic Data Analyst: React/HTTP/CLI → Gemini → the existing manual LangChain tool
-loop → read-only PostgreSQL → tool observations → final answer. The backend
-is cloud-provider agnostic. The selected deployment stack is Vercel Hobby,
-Render Free Web Service, and two Neon Free PostgreSQL projects; deployment
-has not been executed.
+Ask analytical questions in natural language and get answers grounded in PostgreSQL
+query results. A ReAct-style agent discovers relational schemas, inspects metadata,
+and generates and executes guarded read-only SQL through an explicit LangChain
+tool-calling loop, demonstrated on synthetic Sales and SaaS databases.
 
-## Setup
+**Live demo:** [Open Agentic Data Analyst](https://agentic-data-analyst-nine.vercel.app)
 
-Requires Python 3.10 or newer.
+**Backend:** `https://agentic-data-analyst-api.onrender.com` ·
+[Health](https://agentic-data-analyst-api.onrender.com/health) ·
+[Readiness](https://agentic-data-analyst-api.onrender.com/ready)
+
+Both production datasets have been verified end-to-end by the maintainer.
+The backend root is not the demo page; use the frontend to ask questions.
+See the [short demo walkthrough](docs/demo.md).
+
+## Technology
+
+| Layer | Technologies |
+| --- | --- |
+| Agent and tools | Python, LangChain, Gemini, Psycopg 3 |
+| HTTP backend | FastAPI |
+| Relational data | PostgreSQL, Neon |
+| Frontend | React, TypeScript, Vite, Tailwind CSS |
+| Hosting | Render backend, Vercel frontend |
+| Engineering tooling | Docker backend packaging and optional local container execution |
+
+## Why this project exists
+
+The engineering challenge is moving beyond a text-to-SQL demo with a known schema
+and broad database privileges. This project focuses on runtime schema discovery,
+restricted query execution, self-correction, schema generalization, deterministic
+evaluation, and a deployed user-facing demo.
+
+The agent mechanics stay visible: tool binding, Python dispatch, observations,
+and stopping conditions are implemented directly rather than hidden in a framework.
+
+## How it works
+
+```text
+User question → Gemini → get_schema / describe_table → SQL generation
+→ execute_sql → PostgreSQL → ToolMessage → Gemini final response
+```
+
+This is a typical database question flow, not a forced sequence. Gemini chooses
+which tools it needs and can revise SQL after an error or inspect categorical
+values before applying a filter. The explicit loop in [app/agent.py](app/agent.py)
+handles every requested tool call, preserves its `tool_call_id`, and permits at
+most eight model responses, including the final answer. The core agent is a manual
+LangChain tool loop; it does not use LangGraph.
+
+## Core capabilities
+
+- Dynamic discovery of public base tables and their columns.
+- PK/FK, default, nullability, and PostgreSQL semantic-comment inspection.
+- Read-only analytical SQL generation and SQL-error self-correction.
+- Grounding unknown categorical filter values in metadata or bounded value queries.
+- Bounded execution with a statement timeout and result row cap.
+- Isolated Sales/SaaS database profile selection per request.
+- Structured local traces, timing, safe errors, and bounded result previews.
+- Deterministic database-result evaluation and a second-schema generalization suite.
+
+| Tool | Responsibility |
+| --- | --- |
+| `calculator` | Explicit addition, subtraction, multiplication, and division |
+| `get_schema` | Discover public base tables, column names, and data types |
+| `describe_table` | Inspect columns, primary/foreign keys, defaults, and semantic comments |
+| `execute_sql` | Execute one guarded read-only analytical SELECT or supported WITH query |
+
+## Safety model
+
+The project uses defense in depth:
+
+1. Model/tool instructions require schema grounding and factual database results.
+2. SQL validation permits one SELECT or supported WITH statement and rejects common writes/DDL.
+3. Query execution sets the PostgreSQL transaction to `READ ONLY`.
+4. Runtime role `analyst_agent` has SELECT-only table grants and no write privileges.
+5. A **5,000 ms statement timeout** bounds query execution.
+6. At most **100 result rows** are returned, with truncation reported.
+
+**PostgreSQL role permissions are the final permission boundary.** The SQL text
+checks are guardrails, not a complete SQL parser or proof that every query is safe.
+Connection attempts also have a five-second timeout. Credentials remain in server
+environment configuration and are never sent to Gemini or exposed to the browser.
+Only the two predefined synthetic datasets are publicly selectable; arbitrary
+user database connections and write operations are unsupported.
+
+## Cross-database generalization
+
+The same core manual agent loop and four tools were evaluated across two distinct
+PostgreSQL schemas, using runtime discovery rather than a separate SaaS agent:
+
+| Dataset | Tables |
+| --- | --- |
+| Sales | `customers`, `products`, `orders`, `order_items`, `sales` |
+| SaaS | `accounts`, `plans`, `subscriptions`, `invoices`, `support_tickets` |
+
+The SaaS suite was introduced as an unseen second database. Relationships and
+business units come from real PK/FK constraints and PostgreSQL comments; the
+profile configuration selects a connection destination, not a schema-specific
+SQL template. This demonstrates generalization across these two fixtures, not
+reliability on every future database.
+
+## Evaluation
+
+Official recorded live benchmark baselines:
+
+| Dataset | Cases | Passed | Accuracy |
+| --- | ---: | ---: | ---: |
+| Sales | 24 | 22 | **91.67%** |
+| SaaS unseen | 16 | 14 | **87.50%** |
+
+Evaluation is deterministic, not an LLM judge. The agent receives only each
+natural-language question; reference SQL and expected results stay evaluator-only.
+Reference results were verified against PostgreSQL. The runner selects supporting
+SQL from the agent trace, re-executes it read-only, and compares structured results
+using explicit contracts for requested fields, ordering, numeric tolerance, and
+other declared representation rules.
+
+These are limited synthetic-data benchmarks. Known failures include model/provider
+interruptions and convergence or result-representation issues. Diagnostic rescoring
+is not a new live benchmark and does not replace the official numbers above.
+No 100% accuracy or universal text-to-SQL reliability is claimed.
+
+Details: [Sales evaluation](eval/README.md) ·
+[SaaS evaluation](eval/generalization/README.md) ·
+[Architecture and evaluation path](docs/architecture.md#evaluation-and-observability).
+
+## Production architecture
+
+```mermaid
+flowchart LR
+    U[User] --> V[Vercel: React + TypeScript + Vite]
+    V --> R[Render: FastAPI]
+    R --> A[Manual LangChain tool loop]
+    A <--> G[Gemini]
+    A --> P[Python tools and selected profile]
+    P --> S[(Neon Sales)]
+    P --> T[(Neon SaaS)]
+```
+
+Vercel hosts the frontend; Render runs the source-based Python backend; Neon
+hosts separate Sales and SaaS databases. Each request selects one allowlisted
+profile. Docker is retained for consistent backend packaging and optional local
+verification; it is not required for the current Render deployment.
+
+## Repository structure
+
+```text
+app/                   Agent, tools, FastAPI, configuration, database, traces
+frontend/              React/TypeScript/Vite demo and mocked frontend tests
+tests/                 Mocked unit tests and separate PostgreSQL integration tests
+eval/                  Sales/SaaS cases, deterministic runners, offline rescoring
+sql/                   Reproducible dataset, metadata, role, and verification scripts
+docs/                  Architecture, demo, deployment, and tracing guides
+Dockerfile             Optional backend container runtime
+.dockerignore          Strict backend build-context allowlist
+.env.example           Environment names and safe placeholders
+requirements.txt       Existing backend Python dependencies
+.python-version        Backend Python pin
+render.yaml            Source-based Render backend configuration
+```
+
+Generated traces (`runs/`), evaluation reports, migration exports, local env files,
+and build output remain Git ignored. Benchmark definitions remain version-controlled.
+
+## Local development
+
+### Requirements
+
+- Python 3.10+; use the existing Conda environment `llm` (no `.venv`).
+- Node.js 24 LTS recommended; frontend requires Node 22.12 or newer.
+- For local database queries, provision the synthetic PostgreSQL fixtures and a
+  read-only `analyst_agent` role, or supply the existing restricted hosted URLs.
+  The legacy 300-row sales source creation is not scripted in this repository.
+
+### Backend
+
+From the repository root:
 
 ```powershell
 conda activate llm
 python -m pip install -r requirements.txt
-```
-
-Copy `.env.example` to a local `.env` and fill in your own settings. Git ignores
-`.env`; never commit credentials. Hosted processes can supply environment
-variables directly; those values take precedence over `.env`.
-
-| Variables | Purpose |
-| --- | --- |
-| `GOOGLE_API_KEY` | Gemini key |
-| `DATABASE_SALES_URL`, `DATABASE_SAAS_URL` | Optional server-configured PostgreSQL URLs, one per demo profile |
-| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Existing local PostgreSQL fallback; `DB_NAME` remains the CLI/eval default |
-| `ALLOWED_ORIGINS` | Comma-separated browser origins, e.g. `http://localhost:5173`; empty disables cross-origin access |
-| `TRACE_ENABLED`, `TRACE_DIR` | Persistence toggle (`true`/`false`, default true) and directory (default `runs/`) |
-
-Hosted URL format:
-
-```text
-postgresql://<user>:<password>@<host>:5432/<database>?sslmode=require
-```
-
-Psycopg consumes the URL directly, retaining SSL and other connection options.
-Provision `analyst_agent` with read-only permissions separately; never use admin
-credentials as application configuration.
-
-## Run observability
-
-Agent runs save local structured JSON traces under Git-ignored `runs/` by default.
-`TRACE_ENABLED=false` disables file persistence without affecting answers or
-in-memory traces. Relative `TRACE_DIR` paths resolve from the repository root;
-absolute paths are supported. Keep a custom directory outside Git or ignore it.
-An unwritable directory emits a safe warning without replacing the agent result.
-Ephemeral hosting disks can lose traces; no durable cloud storage is implemented.
-Inspect a saved run without calling Gemini:
-
-```powershell
-python -m app.trace --latest
-python -m app.trace "D:\ReAct Agent\runs\<trace-file>.json"
-```
-
-See [the tracing guide](docs/tracing.md) for the schema, preview limits,
-redaction, failure handling, and evaluation linkage.
-
-## Public backend (Phase 4.2)
-
-Start the service locally in the existing environment:
-
-```powershell
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
 uvicorn app.api:app --reload
 ```
 
-Production-style startup (no provider-specific configuration):
+Fill the local `.env` privately before running real queries. Set browser origins
+to match the frontend dev server; process environment values override dotenv.
+Never commit a populated env file or use an owner/superuser URL for runtime access.
 
-```powershell
-uvicorn app.api:app --host 0.0.0.0 --port 8000
-# When the hosting platform supplies PORT:
-uvicorn app.api:app --host 0.0.0.0 --port $env:PORT
-```
-
-On a POSIX shell, the port form is `--port "$PORT"`. No deployment is performed
-by these repository changes; the $0/month infrastructure target is not verified.
-
-| Endpoint | Behavior |
+| Environment variable names | Purpose |
 | --- | --- |
-| `GET /health` | Process liveness, `{"status":"ok"}`; no Gemini/DB calls |
-| `GET /ready` | Configuration presence and both profile resolutions; 200 ready or sanitized 503 |
-| `GET /databases` | Only `id`, display `name`, and `description` for the two profiles |
-| `POST /query` | Stateless question → existing agent → answer and trace linkage |
+| `GOOGLE_API_KEY` | Gemini server credential |
+| `DATABASE_SALES_URL`, `DATABASE_SAAS_URL` | Separate restricted hosted profile destinations |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Supported local PostgreSQL fallback; DB_NAME remains the CLI/eval default |
+| `ALLOWED_ORIGINS` | Explicit comma-separated browser origins |
+| `TRACE_ENABLED`, `TRACE_DIR` | Optional local trace persistence and directory |
 
-Readiness deliberately does not connect to PostgreSQL or call Gemini. It cannot
-guarantee live connectivity, credentials, permissions, or model quota.
+Hosted profile URLs override local fallback settings. HTTP clients submit only
+`sales` or `saas`; the server resolves the actual destination. CLI/evaluation
+retain their existing local configuration unless explicitly scoped otherwise.
 
-`POST /query` accepts a question and an allowed database profile:
+### Frontend
 
-| Profile | Resolution |
-| --- | --- |
-| `sales` | `DATABASE_SALES_URL`, otherwise local `agentic_analyst` |
-| `saas` | `DATABASE_SAAS_URL`, otherwise local `agentic_analyst_saas` |
-
-Connection configuration is internal and absent from `/databases`. Each run
-uses an isolated ContextVar carrying its local name or configured hosted URL;
-profile selection never changes `os.environ`. Existing CLI and eval calls
-retain their normal `DB_*` configuration.
-
-Example request:
-
-```json
-{
-  "question": "Which product category generated the most revenue?",
-  "database": "sales"
-}
-```
-
-Send it from PowerShell (`POST /query` invokes Gemini):
+In a second terminal:
 
 ```powershell
-Invoke-RestMethod -Uri http://127.0.0.1:8000/health
-Invoke-RestMethod -Uri http://127.0.0.1:8000/databases
-$queryBody = @{
-    question = "Which product category generated the most revenue?"
-    database = "sales"
-} | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/query `
-    -ContentType "application/json" -Body $queryBody
-```
-
-Success response shape (illustrative, not a recorded database answer):
-
-```json
-{
-  "status": "success",
-  "answer": "<final answer based on tool results>",
-  "run_id": "<run UUID>",
-  "trace_path": "<local path to saved trace JSON>",
-  "database": "sales"
-}
-```
-
-Questions must contain text and be at most 4,000 characters. Missing fields,
-unknown profiles, malformed requests, and extra fields return HTTP 400 with
-fixed validation feedback. Clients cannot supply database names or connection
-strings. Provider/configuration/database-unavailable failures and the response
-limit return HTTP 503; tool runtime and unexpected internal failures return
-HTTP 500. There are no automatic retries. Failure bodies contain
-`status`, `error_type`, `message`, `run_id`, and `trace_path`, without raw errors
-or submitted invalid values. Validation failures have null trace linkage since
-no agent run started.
-
-API runs reuse the manual agent and existing local traces, with `source="api"`
-and `database_profile`. The response links the trace rather than returning it.
-If trace persistence fails, the answer remains available and `trace_path` is
-null. Traces keep their existing bounded previews and secret redaction.
-
-**Demo/security scope:** only the predefined synthetic sales and SaaS datasets
-are exposed; connecting arbitrary user databases is forbidden. Configure exact
-frontend origins with `ALLOWED_ORIGINS`; wildcards are rejected and CORS
-credentials are disabled. Restart the service after changing CORS settings.
-CORS is browser policy, not authentication. PostgreSQL permissions and READ ONLY
-transactions remain the security boundary; existing SQL guardrails, 5-second
-statement timeout, and 100-row cap remain. The connection timeout is 5 seconds.
-There is no public trace-download endpoint, authentication, or sessions.
-
-Run the full tests without calling Gemini:
-
-```powershell
-$env:RUN_GENERALIZATION_DB_TESTS = "1"
-python -m unittest discover -s tests -v
-```
-
-API tests use TestClient, fake models, and fake connections; integration tests
-also check local sales/SaaS PostgreSQL. No automated test calls Gemini.
-
-## React frontend (Phase 4.3)
-
-React, TypeScript, Vite, and Tailwind CSS power the separate `frontend/` app.
-It is implemented for local use and is **not deployed**.
-
-> Screenshot: to be added after a local demo capture.
-
-Requires Node.js 24 LTS (minimum supported version: 22.12). Run two terminals:
-
-**Terminal 1 — backend**, from the repository root:
-
-```powershell
-cd "D:\ReAct Agent"
-conda activate llm
-$env:ALLOWED_ORIGINS = "http://localhost:5173"
-uvicorn app.api:app --reload
-```
-
-**Terminal 2 — frontend**:
-
-```powershell
-cd "D:\ReAct Agent\frontend"
+cd frontend
 if (!(Test-Path .env)) { Copy-Item .env.example .env }
 npm ci
 npm run dev
 ```
 
-Open `http://localhost:5173`. The Vite server uses this fixed port so it matches
-the backend CORS origin. Configure `VITE_API_BASE_URL` in `frontend/.env` when
-the backend URL changes; its default is `http://localhost:8000`. Restart Vite
-after changing it, and rebuild when changing a production build's API URL.
-Frontend environment values are public: never add Gemini keys, database URLs,
-or credentials. The example file contains only the API base URL.
+Open `http://localhost:5173`. `VITE_API_BASE_URL` is the sole browser environment
+setting. It is public: never put Gemini keys or database credentials in frontend
+configuration. See [deployment setup](docs/deployment.md) for hosted CORS and URLs.
 
-Choose a dataset loaded from `/databases`, select an example or write a question,
-then click **Ask Agent**. Examples fill the input without submitting. Enter adds
-a newline; Ctrl/Cmd+Enter submits. Questions must contain text and stay within
-4,000 characters. Each question is independent; submitting invokes Gemini on
-the backend. Answers show the question, dataset, completion status, and optional
-run ID. Server trace paths and internal execution details are not displayed.
+### Tests and local traces
 
-The responsive page supports system-default light/dark mode and a saved toggle.
-Loading feedback is generic, with a slow-request hint after 10 seconds. Friendly
-errors offer a manual retry; there are no automatic query retries. Lightweight
-startup dataset/health checks have a 15-second timeout and manual refresh.
-Health only reports API liveness, not model or database readiness.
-
-Frontend verification (mocked API; no FastAPI, Gemini, or database calls):
+Tests include offline fake-model/fake-connection checks **and live local PostgreSQL
+integration tests**. A full suite requires the local Sales fixture; optional SaaS
+integration tests also require its fixture. No automated Python test calls Gemini.
 
 ```powershell
-cd "D:\ReAct Agent\frontend"
+python -m pytest -q tests
+# Optional SaaS integration checks, only when database access is intended:
+$env:RUN_GENERALIZATION_DB_TESTS = "1"
+python -m unittest discover -s tests -v
+```
+
+Frontend verification:
+
+```powershell
+cd frontend
 npm run test
 npm run build
 ```
 
-The lockfile pins dependencies. The build checks TypeScript and writes `dist/`;
-dependencies, build output, local frontend environment files, and coverage are
-Git ignored. Manual cloud migration and deployment are the next step.
-
-## Engineering tooling: optional backend Docker
-
-Docker provides reproducible backend packaging, local container execution, and
-portability if hosting changes. Render uses source-based Python deployment.
-The root Dockerfile packages only the Python backend, using
-`python:3.10.20-slim-bookworm` and a non-root user. Uvicorn listens on
-`0.0.0.0:${PORT:-8000}`; its shell uses `exec` to forward stop signals.
-The Python stdlib healthcheck calls only `/health`. The frontend stays separate.
-
-With Docker Desktop running in Linux-container mode:
+Inspect local trace evidence without model/database calls:
 
 ```powershell
-cd "D:\ReAct Agent"
-docker build -t agentic-data-analyst:local .
-docker run --rm -p 8000:8000 --env-file .env `
-    -e DB_HOST=host.docker.internal -e PORT=8000 `
-    -e TRACE_ENABLED=false -e TRACE_DIR=/app/runs `
-    -e ALLOWED_ORIGINS=http://localhost:5173 `
-    agentic-data-analyst:local
+python -m app.trace --latest
 ```
 
-`--env-file .env` is for local testing only. It passes configuration at runtime;
-the Git-ignored `.env` is excluded from the build context and image. Inside
-Docker, `localhost` is the container: `host.docker.internal` reaches Windows
-host PostgreSQL without editing the normal local `.env`. Keep `DB_USER` on
-`analyst_agent`. Configured hosted URLs take precedence over local `DB_*` settings.
+Production file traces are disabled; local tracing supports redaction and bounded
+previews. See [docs/tracing.md](docs/tracing.md). Merely selecting a live demo
+example fills the form; submitting a question invokes Gemini and consumes quota.
 
-In another terminal, make these configuration/liveness checks (no Gemini or DB calls):
+## Deployment overview
 
-```powershell
-Invoke-RestMethod http://localhost:8000/health
-Invoke-RestMethod http://localhost:8000/ready
-Invoke-RestMethod http://localhost:8000/databases
-```
+- **Neon:** two isolated synthetic PostgreSQL datasets with restricted `analyst_agent` runtime access.
+- **Render:** FastAPI source deployment, Gemini key and separate database URLs supplied privately at runtime.
+- **Vercel:** static Vite build with a public API base URL; backend CORS allows the exact frontend origin.
+- **Docker:** backend packaging for optional local/container verification and future portability.
 
-Runtime settings are `GOOGLE_API_KEY`, `DATABASE_SALES_URL`,
-`DATABASE_SAAS_URL`, `ALLOWED_ORIGINS`, `TRACE_ENABLED`, `TRACE_DIR`, and `PORT`.
-Local PostgreSQL can use the existing `DB_*` fallback settings instead of URLs.
-The image defaults to port 8000, tracing disabled, and `/app/runs` as the writable
-trace directory. To enable local container tracing, replace the tracing flag with
-`-e TRACE_ENABLED=true -e TRACE_DIR=/app/runs`; files disappear with the container.
-See [the deployment guide](docs/deployment.md) for fake-config smoke tests and
-future cloud runtime settings. The Docker build and container checks are pending:
-Docker Desktop's engine was unavailable during this phase's verification.
+Production Sales and SaaS queries are maintainer-verified. This documentation
+phase did not repeat live queries, benchmarks, or cloud changes. The $0/month
+infrastructure target remains subject to provider allowances, usage, and model quota.
+Operational instructions: [docs/deployment.md](docs/deployment.md).
 
-## Public Deployment Preparation
+## Known limitations
 
-**Preparation complete; not deployed.** The selected stack targets $0/month
-within provider free-tier limits: Vercel Hobby frontend, Render Free backend,
-two Neon Free databases, and the existing Gemini Developer
-API. Confirm limits before provisioning; no cloud resources have been created.
+- Temperature 0 does not make external LLM behavior fully deterministic.
+- Provider failures and rate limits can interrupt a run; there are no automatic provider retries.
+- Render Free instances may cold start after inactivity ([service lifecycle](https://render.com/docs/free)).
+- Benchmarks cover only the synthetic Sales/SaaS datasets; arbitrary production-schema accuracy is not guaranteed.
+- The agent can reach its eight-response limit before finalizing an answer.
+- Evaluation SQL selection and representation contracts have known limitations.
+- No write operations, authentication, sessions, streaming, or arbitrary database connections are supported.
+- Production tracing has no durable storage; readiness checks configuration, not connectivity or provider quota.
+- Docker files are implemented, but local image/runtime verification is still pending from the unavailable Docker engine.
 
-Follow [the manual deployment guide and checklist](docs/deployment.md) for
-exact PowerShell commands and credential-safe prompts:
+## Future work
 
-1. **Neon:** create separate `agentic-analyst-sales` and `agentic-analyst-saas`
-   PostgreSQL 18 projects. Export each local public schema with `pg_dump` and
-   restore into its empty target with `pg_restore --no-owner --no-acl`.
-   Comments, indexes, data, and PK/FK constraints are retained.
-2. **Restricted role:** run `sql/deployment/01_runtime_role.sql` as the owner,
-   set its password interactively with `\password analyst_agent`, and run the
-   metadata and permission verification scripts as `analyst_agent`. Use only
-   this role's SSL-enabled connection URLs in application configuration.
-3. **Render:** manually import/review `render.yaml` after Neon verification.
-   It defines one source-based Free Python Web Service: build
-   `pip install -r requirements.txt`, start
-   `uvicorn app.api:app --host 0.0.0.0 --port $PORT`, health `/health`.
-   Supply the Gemini key and restricted Neon URLs through Render environment
-   configuration. Production uses `TRACE_ENABLED=false`; no Render database
-   or Docker image publication is required.
-4. **Vercel:** connect the same repository with Root Directory `frontend`,
-   framework Vite, Node 24.x, install `npm ci`, build `npm run build`, output
-   `dist`, and public `VITE_API_BASE_URL` set to the Render backend HTTPS origin.
-   The one-page frontend needs no routing configuration or `vercel.json`.
-5. **CORS:** obtain the Vercel production origin, set Render `ALLOWED_ORIGINS`
-   to that exact origin, and redeploy/restart the backend. Never use `*`.
-6. **Smoke test:** check health/configuration/datasets, then manually test a
-   sales and SaaS question in the browser when ready to consume Gemini quota.
+Planned, not implemented:
 
-Dump files and `.deployment-tmp/` are ignored. Never commit populated env files,
-credentials, or hosted URLs. Render Free storage is ephemeral: file
-traces are disabled, while local/eval tracing remains unchanged. Cold starts
-use the existing generic UI hint; no keep-alive pings are added. `render.yaml`
-is the primary backend deployment configuration. Docker remains optional tooling.
-The Gemini model remains `gemini-3.5-flash-lite`.
-
-**Next phase: manual Neon migration and read-only runtime-role verification.**
-Render/Vercel deployment remains a later manual step.
-
-## Folder structure
-
-```text
-ReAct Agent/
-├── app/
-│   ├── __init__.py
-│   ├── agent.py
-│   ├── api.py
-│   ├── config.py
-│   ├── profiles.py
-│   ├── llm.py
-│   ├── database.py
-│   ├── tools.py
-│   └── trace.py
-├── tests/
-│   ├── test_agent.py
-│   ├── test_api.py
-│   ├── test_public_backend.py
-│   ├── test_tools.py
-│   ├── test_eval_cases.py
-│   ├── test_eval_runner.py
-│   ├── test_trace.py
-│   └── test_generalization.py
-├── docs/
-│   ├── tracing.md
-│   └── deployment.md
-├── frontend/
-│   ├── src/
-│   │   ├── api/            # Typed client, contracts, and API tests
-│   │   ├── components/     # Header, dataset, question, examples, answer
-│   │   ├── test/setup.ts
-│   │   ├── App.tsx
-│   │   ├── App.test.tsx
-│   │   ├── main.tsx
-│   │   ├── index.css
-│   │   └── examples.ts
-│   ├── public/favicon.svg
-│   ├── .env.example
-│   ├── index.html
-│   ├── package.json
-│   ├── package-lock.json
-│   ├── tsconfig.json
-│   └── vite.config.ts
-├── eval/
-├── sql/
-│   └── deployment/        # Manual owner role setup + runtime verification
-├── runs/                 # Local generated traces; ignored by Git
-├── .gitignore
-├── .dockerignore
-├── Dockerfile
-├── .env.example
-├── .python-version
-├── render.yaml           # Primary source-based Render backend deployment
-├── requirements.txt
-└── README.md
-```
+- MCP integration as a meaningful tool interoperability layer.
+- A larger schema/generalization benchmark.
+- Richer observability with an appropriate durable storage strategy.
+- Optional model-provider abstraction when justified by a real use case.

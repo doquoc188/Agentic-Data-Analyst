@@ -1,15 +1,27 @@
-# Public deployment preparation (Phase 4.4C)
+# Deployment and operations
 
-Updated October 4, 2026. **No deployment or cloud migration has been executed.**
-Selected stack: Vercel Hobby (React/Vite frontend), Render Free Web Service
-(FastAPI), two Neon Free PostgreSQL projects, GitHub, and the existing Gemini
-Developer API. `render.yaml` is the primary source-based backend configuration.
-Docker is optional tooling for reproducible packaging and local verification.
-The target is $0/month **within free-tier limits**, not an unconditional cost
-guarantee. Confirm dashboard plan/usage limits before provisioning. No cloud
-resources, keep-alive pings, or durable cloud trace storage are configured.
-**Next phase: manual Neon migration and read-only runtime-role verification**
-(sections 2–6). Render/Vercel deployment follows in a separately authorized phase.
+Production is verified end-to-end for both Sales and SaaS by the maintainer,
+as reported on October 6, 2026. This documentation phase does not repeat live
+Gemini/database checks, redeploy services, or change cloud configuration.
+
+- Frontend: [Agentic Data Analyst](https://agentic-data-analyst-nine.vercel.app)
+- Backend: `https://agentic-data-analyst-api.onrender.com`
+- Checks: [health](https://agentic-data-analyst-api.onrender.com/health) and
+  [readiness](https://agentic-data-analyst-api.onrender.com/ready)
+
+The deployed architecture is Vercel (React/Vite), Render (source-based FastAPI),
+and separate Neon Sales/SaaS PostgreSQL databases, with Gemini on the backend.
+`render.yaml` documents the source-based Python service; Docker is retained for
+optional local packaging/verification, not required for this deployment path.
+
+The infrastructure target is $0/month within free-tier limits, not an unconditional
+cost guarantee or an audited billing result. Check provider usage and Gemini quota.
+Production file tracing is disabled; no durable cloud trace store is implemented.
+
+Sections 2–6 preserve the manual migration/role-verification procedure as an
+operational reference for a new dedicated target. Existing production is already
+working: do not rerun setup against populated databases or change working runtime
+URLs during documentation work. The next planned phase is MCP integration.
 
 ## 1. Versions and unchanged application
 
@@ -30,11 +42,12 @@ Create Free projects `agentic-analyst-sales` and `agentic-analyst-saas`, selecti
 project; the default name `neondb` is fine. The app uses the database in each
 hosted URL, so hosted names need not match the local names.
 
-Record each project's database name, owner role, and **direct/unpooled** host
-privately. Use direct connections for these tiny demos and migration commands;
-no connection pool is needed. Keep the owner's credentials only for migration,
-never in the application runtime or frontend. Do not restore into a database with unrelated
-objects. Source databases are `agentic_analyst` and `agentic_analyst_saas`.
+For migration commands, record each project's database name, owner role, and
+**direct/unpooled** host privately. These examples use direct migration endpoints;
+they do not establish whether the current production runtime URLs are pooled.
+Keep the owner's credentials only for migration, never in the application runtime
+or frontend. Do not restore into a database with unrelated objects. Source databases
+are `agentic_analyst` and `agentic_analyst_saas`.
 
 ## 3. Export local public schemas manually
 
@@ -194,18 +207,20 @@ retained. Run this only as the runtime role on the dedicated demo database.
 ## 6. Configure restricted connection URLs
 
 Use each project's connection dialog to select `analyst_agent`, the correct
-database and direct host. Supply the password set with `\password` privately;
+database, and the intended runtime endpoint. Preserve the working deployed URLs;
+the application passes URLs natively to Psycopg and does not force pooled or direct
+connections. Supply the password set with `\password` privately;
 retain Neon's SSL/channel-binding query options. URL-encode password special
 characters if constructing a URL manually. Only a placeholder belongs in docs:
 
 ```text
-postgresql://analyst_agent:<URL-encoded-runtime-password>@<direct-neon-host>:5432/<database>?sslmode=require&channel_binding=require
+postgresql://analyst_agent:<URL-encoded-runtime-password>@<neon-runtime-host>:5432/<database>?sslmode=require&channel_binding=require
 ```
 
-Later supply the sales URL as Render's `DATABASE_SALES_URL` and the SaaS URL as
+Supply the sales URL as Render's `DATABASE_SALES_URL` and the SaaS URL as
 `DATABASE_SAAS_URL` through private environment settings, never GitHub, frontend
-variables, or logs. Verify
-the URL role is `analyst_agent`; never substitute the owner to bypass a failure.
+variables, or logs. Verify the URL role is `analyst_agent`; never substitute the
+owner to bypass a failure.
 Keep the local `.env` unchanged. No `DB_*` fallback values are needed on Render
 when both hosted URLs are configured.
 
@@ -244,21 +259,23 @@ populated `.env` is uploaded. Render supplies PORT; the Linux start command uses
 but production file tracing is disabled on Render's ephemeral filesystem.
 Responses retain run IDs and have null trace_path; local/eval tracing is unchanged.
 
-Deploy manually only when authorized, then record the backend HTTPS origin for
-Vercel configuration. `/health` is liveness; `/ready` checks configuration only,
+For a future redeployment, act only when authorized. The current backend origin
+is `https://agentic-data-analyst-api.onrender.com`; use it for Vercel configuration. `/health` is liveness; `/ready` checks configuration only,
 not database connectivity or Gemini quota. Cold starts are expected; retain the
 existing UI hint without keep-alive traffic. Review current Free plan limits
-before deployment. No Render resource has been created during this cleanup.
+before deployment. This polish phase makes no Render changes.
 
 ## 8. Vercel frontend — manual deployment
 
-After the Render backend has its HTTPS origin:
+The deployed frontend is `https://agentic-data-analyst-nine.vercel.app`.
+For reproducing its setup or a separately authorized redeployment:
 
 1. Import the same GitHub repository into Vercel on Hobby. Set **Root Directory
    `frontend`**, **Framework Vite**, **Node 24.x**, **Install `npm ci`**,
    **Build `npm run build`**, **Output `dist`**.
-2. Set production `VITE_API_BASE_URL` to the Render backend HTTPS origin, then
-   deploy. Vite embeds this public URL at build time; changes require a fresh build.
+2. Set production `VITE_API_BASE_URL` to
+   `https://agentic-data-analyst-api.onrender.com`, then deploy. Vite embeds this
+   public URL at build time; changes require a fresh build.
 3. Record the final Vercel production origin (`https://<project>.vercel.app`,
    without a path or trailing slash) for the CORS update below.
 
@@ -266,12 +283,13 @@ The frontend has one page with hash anchors and no React Router paths.
 No `vercel.json`, route fallback, serverless functions, or router is needed.
 Only `VITE_API_BASE_URL` belongs in Vercel's frontend environment. Do not import
 backend env files or expose Gemini keys, hosted DB URLs, or owner credentials.
-No Vercel deployment has been executed during this cleanup.
+This polish phase makes no Vercel changes.
 
 ## 9. Final CORS update
 
-Set Render `ALLOWED_ORIGINS` to the **exact** Vercel production origin. For
-multiple approved origins, use an explicit comma-separated list; never use `*`
+Render `ALLOWED_ORIGINS` should contain the exact deployed frontend origin:
+`https://agentic-data-analyst-nine.vercel.app`. For multiple approved origins,
+use an explicit comma-separated list; never use `*`
 or a wildcard preview-domain pattern. Preview origins are not automatically
 trusted. Manually redeploy/restart the backend to refresh startup CORS settings,
 then test from the production frontend, including CORS preflight.
@@ -295,8 +313,9 @@ then test from the production frontend, including CORS preflight.
 - [ ] Record actual hosting URLs and live smoke-test results privately. Share
       the public frontend only after the checks pass; never publish owner URLs.
 
-These are future manual checks. This cleanup makes no Gemini calls, changes no
-databases, and creates no cloud resources. No authentication, streaming, provider
+The maintainer verified production queries for both datasets. The checklist is
+retained for future releases; this polish phase does not rerun live checks, change
+databases, or create cloud resources. No authentication, streaming, provider
 retries, or benchmark tuning are added.
 
 ## 11. Optional Docker local verification
@@ -357,9 +376,8 @@ Docker port mapping. Its defaults are PORT=8000 and TRACE_ENABLED=false.
 **Verification status:** Phase 4.4B passed 161 backend tests with SaaS checks
 but could not build/run the image because Docker Desktop's Linux engine was
 unavailable. Container startup, health/user/trace checks, layers, and size remain
-unverified. Phase 4.4C changes only docs and Render comments; static checks confirm
-Docker configuration is intact. Full Python/frontend regression was not required
-or rerun for this cleanup.
+unverified. Docker remains unchanged during final polish. Its runtime verification
+is not inferred from the working source-based Render deployment.
 
 ## Official references
 
