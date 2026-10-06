@@ -4,14 +4,17 @@ Phase 3.6 uses a separate synthetic SaaS database, `agentic_analyst_saas`, with
 the existing manual agent and four generic tools. The original sales database,
 24 sales cases, expected answers, and saved results stay separate.
 
-## Preparation status
+## Verified status
 
 The user completed the administrative migration. Read-only runtime checks and
 all 16 reference queries succeeded as `analyst_agent`. Every case now stores a
-PostgreSQL-derived `expected_result` with `ground_truth_verified: true`. All 125
-automated tests passed, including the explicitly enabled SaaS integration checks.
-**No live generalization benchmark has run.** For a future fresh fixture, pending
-cases use null/false markers and the runner refuses them before calling Gemini.
+PostgreSQL-derived `expected_result` with `ground_truth_verified: true`. Phase 3.6
+preparation passed all 125 tests, including explicitly enabled SaaS checks.
+The official recorded live SaaS baseline is **14/16 (87.50%)**; the separate Sales
+baseline is **22/24 (91.67%)**. Phase 3 is closed. Phase 3.7 categorical grounding
+was also verified live; no benchmark is rerun during release preparation.
+For a future fresh fixture, pending cases use null/false markers and the runner
+refuses them before calling Gemini.
 
 ## Database fixture
 
@@ -155,7 +158,7 @@ try {
 }
 ```
 
-## Future live evaluation
+## Reproducing live evaluation (explicit approval required)
 
 Wait for deterministic verification, the full test suite, and explicit user
 approval before running the live runner. It checks verified ground truth and
@@ -181,5 +184,6 @@ case links `run_id` and `trace_path`; its single Phase 3.5 trace uses
 redacted as before, with no ground truth or scoring decisions included. Existing
 traces support later failure diagnosis without a new analysis framework.
 
-The first approved run is an honest unseen-database baseline. No target pass
-percentage is encoded, and no sales benchmark is rerun automatically.
+The recorded 14/16 score is the official unseen-database baseline, not a guarantee
+for arbitrary schemas. No target pass percentage is encoded, and no Sales or SaaS
+benchmark is rerun automatically. Offline rescoring does not replace live scores.

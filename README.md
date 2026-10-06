@@ -15,6 +15,65 @@ Both production datasets have been verified end-to-end by the maintainer.
 The backend root is not the demo page; use the frontend to ask questions.
 See the [short demo walkthrough](docs/demo.md).
 
+**v1.0.0 release candidate:** functionally complete; final diff review, release
+checks, commit, and tag remain manual. See the [release checklist](docs/release-checklist.md)
+and [release notes](docs/release-notes-v1.0.0.md).
+
+## Architecture
+
+```mermaid
+flowchart LR
+    U[User] --> V[Vercel: React + TypeScript + Vite]
+    V --> R[Render: FastAPI]
+    R --> A[Manual LangChain tool loop]
+    A <--> G[Gemini]
+    A --> P[Python tools and selected profile]
+    P --> S[(Neon Sales)]
+    P --> T[(Neon SaaS)]
+```
+
+Vercel hosts the frontend; Render runs the source-based Python backend; Neon
+hosts separate Sales and SaaS databases. Each request selects one allowlisted
+profile. Docker is retained for consistent backend packaging and optional local
+verification; it is not required for the current Render deployment.
+
+```text
+Web: Vercel frontend -> FastAPI -> manual LangChain Agent -> safe tools -> PostgreSQL
+MCP: MCP client -> local stdio MCP server -> same safe data layer -> PostgreSQL
+```
+
+The web Agent does not use MCP internally. The local MCP interface requires no
+Gemini and is not publicly hosted.
+
+## Official benchmarks
+
+| Dataset | Cases | Passed | Accuracy |
+| --- | ---: | ---: | ---: |
+| Sales | 24 | 22 | **91.67%** |
+| SaaS unseen | 16 | 14 | **87.50%** |
+
+Recorded live results on two synthetic fixtures, scored deterministically against
+PostgreSQL reference results. These are limited benchmark scores, not a guarantee
+for every live answer. See [evaluation details](#evaluation).
+
+## Core capabilities
+
+- Dynamic discovery of public base tables and their columns.
+- PK/FK, default, nullability, and PostgreSQL semantic-comment inspection.
+- Read-only analytical SQL generation and SQL-error self-correction.
+- Grounding unknown categorical filter values in metadata or bounded value queries.
+- Bounded execution with a statement timeout and result row cap.
+- Isolated Sales/SaaS database profile selection per request.
+- Structured local traces, timing, safe errors, and bounded result previews.
+- Deterministic database-result evaluation and a second-schema generalization suite.
+
+| Tool | Responsibility |
+| --- | --- |
+| `calculator` | Explicit addition, subtraction, multiplication, and division |
+| `get_schema` | Discover public base tables, column names, and data types |
+| `describe_table` | Inspect columns, primary/foreign keys, defaults, and semantic comments |
+| `execute_sql` | Execute one guarded read-only analytical SELECT or supported WITH query |
+
 ## Technology
 
 | Layer | Technologies |
@@ -51,32 +110,9 @@ handles every requested tool call, preserves its `tool_call_id`, and permits at
 most eight model responses, including the final answer. The core agent is a manual
 LangChain tool loop; it does not use LangGraph.
 
-## Core capabilities
-
-- Dynamic discovery of public base tables and their columns.
-- PK/FK, default, nullability, and PostgreSQL semantic-comment inspection.
-- Read-only analytical SQL generation and SQL-error self-correction.
-- Grounding unknown categorical filter values in metadata or bounded value queries.
-- Bounded execution with a statement timeout and result row cap.
-- Isolated Sales/SaaS database profile selection per request.
-- Structured local traces, timing, safe errors, and bounded result previews.
-- Deterministic database-result evaluation and a second-schema generalization suite.
-
-| Tool | Responsibility |
-| --- | --- |
-| `calculator` | Explicit addition, subtraction, multiplication, and division |
-| `get_schema` | Discover public base tables, column names, and data types |
-| `describe_table` | Inspect columns, primary/foreign keys, defaults, and semantic comments |
-| `execute_sql` | Execute one guarded read-only analytical SELECT or supported WITH query |
-
 ## MCP interface
 
 The safe analytical data layer is also available to local MCP-compatible clients:
-
-```text
-Web: Vercel -> FastAPI -> Agent -> tools -> PostgreSQL
-MCP: MCP client -> stdio MCP server -> same safe data/tool layer -> PostgreSQL
-```
 
 The web Agent does not use MCP internally. The independent server exposes
 `list_database_profiles`, `get_schema`, `describe_table`, and `execute_sql`.
@@ -138,12 +174,7 @@ reliability on every future database.
 
 ## Evaluation
 
-Official recorded live benchmark baselines:
-
-| Dataset | Cases | Passed | Accuracy |
-| --- | ---: | ---: | ---: |
-| Sales | 24 | 22 | **91.67%** |
-| SaaS unseen | 16 | 14 | **87.50%** |
+The official recorded baselines above are unchanged.
 
 Evaluation is deterministic, not an LLM judge. The agent receives only each
 natural-language question; reference SQL and expected results stay evaluator-only.
@@ -161,24 +192,6 @@ Details: [Sales evaluation](eval/README.md) ·
 [SaaS evaluation](eval/generalization/README.md) ·
 [Architecture and evaluation path](docs/architecture.md#evaluation-and-observability).
 
-## Production architecture
-
-```mermaid
-flowchart LR
-    U[User] --> V[Vercel: React + TypeScript + Vite]
-    V --> R[Render: FastAPI]
-    R --> A[Manual LangChain tool loop]
-    A <--> G[Gemini]
-    A --> P[Python tools and selected profile]
-    P --> S[(Neon Sales)]
-    P --> T[(Neon SaaS)]
-```
-
-Vercel hosts the frontend; Render runs the source-based Python backend; Neon
-hosts separate Sales and SaaS databases. Each request selects one allowlisted
-profile. Docker is retained for consistent backend packaging and optional local
-verification; it is not required for the current Render deployment.
-
 ## Repository structure
 
 ```text
@@ -187,7 +200,7 @@ frontend/              React/TypeScript/Vite demo and mocked frontend tests
 tests/                 Mocked unit tests and separate PostgreSQL integration tests
 eval/                  Sales/SaaS cases, deterministic runners, offline rescoring
 sql/                   Reproducible dataset, metadata, role, and verification scripts
-docs/                  Architecture, demo, deployment, tracing, and MCP guides
+docs/                  Architecture, demo, deployment, tracing, MCP, and release guides
 Dockerfile             Optional backend container runtime
 .dockerignore          Strict backend build-context allowlist
 .env.example           Environment names and safe placeholders
@@ -306,10 +319,13 @@ Operational instructions: [docs/deployment.md](docs/deployment.md).
 - Production tracing has no durable storage; readiness checks configuration, not connectivity or provider quota.
 - Docker files are implemented, but local image/runtime verification is still pending from the unavailable Docker engine.
 
-## Future work
+## Optional future work
 
-Planned, not implemented:
+No further architecture changes are planned for v1.0. These ideas are optional,
+not release requirements:
 
 - A larger schema/generalization benchmark.
 - Richer observability with an appropriate durable storage strategy.
 - Optional model-provider abstraction when justified by a real use case.
+
+Portfolio evidence: [recommended real screenshots and captions](docs/portfolio.md).

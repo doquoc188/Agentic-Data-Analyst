@@ -1,8 +1,9 @@
 # Local agent traces
 
-Every `run_agent()` invocation saves one UTF-8 JSON document in the project-root
-`runs/` directory, including failed runs. The directory is created automatically
-and ignored by Git. File names contain a UTC start timestamp and UUID run ID:
+With persistence enabled and a writable destination, each `run_agent()` invocation
+saves one UTF-8 JSON document, including failed runs. The default project-root
+`runs/` directory is created automatically and ignored by Git. File names contain
+a UTC start timestamp and UUID run ID:
 
 ```text
 runs/20261003T141812Z_<run_id>.json

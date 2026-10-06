@@ -5,6 +5,12 @@
 This personal portfolio project builds an Agentic Data Analyst in small, teachable phases.
 Keep the architecture simple so its agent mechanics remain understandable.
 
+The project is functionally complete and prepared as a v1.0.0 release candidate.
+Production Sales/SaaS and local MCP interoperability/read-only checks are
+maintainer-verified. Official scores remain Sales 22/24 (91.67%) and unseen SaaS
+14/16 (87.50%). Final review, commit, and tag are manual; no further architecture
+changes are planned. Future work is optional and requires an explicit request.
+
 User → Gemini → manual LangChain tool-calling loop → Python tools → PostgreSQL
 → tool observations → Gemini final answer.
 
@@ -120,6 +126,9 @@ phase has a clear need, never for a technology keyword.
   offline verification, and interoperability limitations.
 - `docs/mcp-demo.md`: Inspector 2.9.0 setup and manual read-only Neon demo,
   user-verified results, reproducible checks, write rejection, and safe evidence guidance.
+- `docs/portfolio.md`: recommended real screenshots, captions, and private-data exclusions.
+- `docs/release-checklist.md`: historical verification, offline release checks,
+  and final manual gates; `docs/release-notes-v1.0.0.md` summarizes the release candidate.
 - `docs/architecture.md`: request routing, manual tool loop, profile isolation,
   security boundaries, deterministic evaluation, and observability.
 - `docs/demo.md`: live-demo walkthrough and suggested Sales/SaaS questions.
@@ -363,8 +372,8 @@ per-request environment override. Keep the primary `.env` DB_NAME unchanged.
   No Gemini calls, cloud resources, pushes, deployment, or database changes.
 - Phase 4.4C deployment architecture cleanup complete: Vercel frontend, source-based
   Render Free backend, and two Neon PostgreSQL projects. Docker is retained as
-  reproducible packaging and optional local verification. Azure removed; GHCR
-  removed from the required architecture; Kubernetes is out of scope.
+  reproducible packaging and optional local verification. Superseded hosting and
+  required image-registry plans were removed.
   Only docs and Render comments changed; Docker files, application, frontend,
   and SQL scripts are unchanged. Static checks passed; full regression was not
   required. No Gemini calls, deployments, cloud resources, or database changes.
@@ -398,6 +407,10 @@ per-request environment override. Keep the primary `.env` DB_NAME unchanged.
   Closure changes documentation only; tests/live checks were not repeated by Codex.
   No Gemini was involved. MCP remains local stdio with analyst_agent access;
   no production architecture, Agent/API/frontend/SQL, schema, or deployment changes.
+- Final project closure: v1.0.0 portfolio release candidate prepared through a
+  documentation audit, release notes/checklist, and real screenshot guide.
+  Application behavior, benchmarks, and deployment are unchanged. Release checks
+  are recorded in docs/release-checklist.md; no live checks, commit, tag, or push.
 
 ## 8. Current Known Issue / Next Work
 
@@ -418,9 +431,12 @@ The production frontend/backend URLs are listed in section 1. Production
 end-to-end verification was supplied by the maintainer; final polish did not
 repeat live checks. Do not replace official scores with diagnostic rescoring.
 
-**Phase 5.2 is closed:** the user's real-client/live read-only verification is
-recorded in docs/mcp.md and docs/mcp-demo.md. No next implementation phase is
-authorized; wait for an explicit user request. Preserve the manual agent, prompt,
+**Project closure:** v1.0.0 release candidate is ready for final maintainer review;
+follow docs/release-checklist.md before committing/tagging. Phase 5.2 real-client
+Sales/SaaS metadata, analyst_agent/on, counts, and write rejection are verified in
+docs/mcp.md and docs/mcp-demo.md. No further architecture change is planned;
+future improvements are optional and need an explicit request. Preserve the manual
+agent, prompt,
 eight-response limit, tools, profile routing, SQL protections, API, and frontend
 behavior unless the user requests a behavior change. Docker runtime verification remains optional
 and pending. Runtime Neon URLs use restricted analyst_agent access and retain SSL

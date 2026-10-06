@@ -21,7 +21,9 @@ Production file tracing is disabled; no durable cloud trace store is implemented
 Sections 2–6 preserve the manual migration/role-verification procedure as an
 operational reference for a new dedicated target. Existing production is already
 working: do not rerun setup against populated databases or change working runtime
-URLs during documentation work. The next planned phase is MCP integration.
+URLs during documentation work. Local stdio MCP interoperability is complete;
+see [the verified walkthrough](mcp-demo.md). Final release gates are tracked in
+[release-checklist.md](release-checklist.md).
 
 ## 1. Versions and unchanged application
 
@@ -31,8 +33,9 @@ URLs during documentation work. The next planned phase is MCP integration.
   `python:3.10.20-slim-bookworm`, without Conda.
 - Vercel Node: select **24.x**, matching the local frontend's Node 24 major.
 - Gemini model remains **`gemini-3.5-flash-lite`**, temperature 0.
-- `requirements.txt` remains unpinned; inspect Render build logs for resolved
-  dependencies. Passing local tests does not verify a hosted installation.
+- Most Python dependencies are unpinned; the MCP SDK has a supported 1.x range
+  (`mcp>=1.30,<2`). Inspect Render build logs for resolved dependencies. Passing
+  local tests does not verify a hosted installation.
 - Agent loop, tools, SQL protections, local tracing, and profiles are unchanged.
 
 ## 2. Create two Neon projects manually
