@@ -124,6 +124,13 @@ cannot set a working directory, launch it from the repository root or use its
 documented equivalent. Local fallback can use the existing private `.env` instead
 of hosted URLs. Gemini configuration is unnecessary for this interface.
 
+For the Inspector demo, prefer launching from the repository root and keeping
+runtime URLs in the existing private environment/`.env`, rather than copying them
+into an Inspector catalog or passing `-e KEY=value` on the command line. The
+template above is illustrative: do not give a client literal unexpanded URL
+placeholders. The [Phase 5.2 walkthrough](mcp-demo.md) documents Inspector 2.9.0,
+including its CLI `--` separator for Python's `-m` argument and manual Neon steps.
+
 ## Offline verification
 
 ```powershell
@@ -138,15 +145,36 @@ No Gemini or live database calls are made. Existing full-suite PostgreSQL tests
 must be deselected when database access is forbidden; that is not live permission
 verification.
 
+## Verified Phase 5.2 results
+
+Phase 5.2 is complete based on the user's successful manual verification with
+MCP Inspector 2.9.0 through the real local stdio client:
+
+- The server connected and exposed exactly `list_database_profiles`, `get_schema`,
+  `describe_table`, and `execute_sql`; profile listing returned `sales` and `saas`.
+- `get_schema` succeeded for both datasets; `describe_table` succeeded for Sales
+  `orders` and SaaS `subscriptions`.
+- Both profiles reported `current_user = analyst_agent` and
+  `transaction_read_only = on` through `execute_sql`.
+- `SELECT COUNT(*) AS sales_rows FROM sales;` returned **300** for Sales.
+- `SELECT COUNT(*) AS subscription_rows FROM subscriptions;` returned **120** for SaaS.
+- `DELETE FROM sales;` was rejected through MCP; no write occurred.
+
+No Gemini was involved. MCP remains local stdio only, and production deployment
+architecture is unchanged. This documentation closure records the user's report;
+Codex did not repeat the client/database checks. See [mcp-demo.md](mcp-demo.md)
+for the reproducible walkthrough and verification summary.
+
 ## Limits and next phase
 
 - Local stdio only; no public hosting, HTTP MCP, authentication, or OAuth.
 - Exactly four MCP tools; calculator, shell, files, and write tools are not exposed.
 - No agent loop, sampling/model invocation, automatic retries, or additional tracing.
-- SDK subprocess interoperability is verified; a third-party client demo and live
-  database-through-MCP verification remain unperformed.
+- SDK subprocess interoperability and Inspector 2.9.0 CLI initialization,
+  tool discovery, and profile listing are verified without database calls.
+  The user also completed real-client/live read-only Sales and SaaS verification.
 - Render/Vercel deployment and Docker startup configuration remain unchanged;
   the image is not rebuilt as part of this phase.
 
-Phase 5.2 is MCP client interoperability/demo, only after review and separate
-authorization for any live queries or external model calls.
+Phase 5.2 interoperability/demo is complete. The next phase requires an explicit
+user request; external model calls or production changes require separate authorization.

@@ -118,6 +118,8 @@ phase has a clear need, never for a technology keyword.
 - `docs/tracing.md`: trace schema, storage, preview/security policy, and commands.
 - `docs/mcp.md`: local stdio tools, profile routing, safety, client placeholders,
   offline verification, and interoperability limitations.
+- `docs/mcp-demo.md`: Inspector 2.9.0 setup and manual read-only Neon demo,
+  user-verified results, reproducible checks, write rejection, and safe evidence guidance.
 - `docs/architecture.md`: request routing, manual tool loop, profile isolation,
   security boundaries, deterministic evaluation, and observability.
 - `docs/demo.md`: live-demo walkthrough and suggested Sales/SaaS questions.
@@ -382,6 +384,20 @@ per-request environment override. Keep the primary `.env` DB_NAME unchanged.
   on Python 3.10.20. Offline pytest: 158 passed, 19 live DB tests deselected;
   16 MCP tests include actual subprocess handshake/listing/shutdown.
   No Gemini calls, live DB calls/changes, benchmark runs, deployments, or pushes.
+- Phase 5.2 MCP Client Interoperability and Demo complete: the user verified
+  real stdio interoperability with MCP Inspector 2.9.0. Exactly the four tools
+  list_database_profiles/get_schema/describe_table/execute_sql were exposed;
+  public profiles returned sales/saas. Both schemas and Sales orders/SaaS
+  subscriptions descriptions succeeded. Both live profiles reported
+  current_user=analyst_agent and transaction_read_only=on; counts were 300
+  sales rows and 120 subscriptions. DELETE FROM sales was rejected; no write occurred.
+  Inspector 2.9.0 CLI initialized the real stdio server (protocol 2025-11-25),
+  advertised exactly four tools, and returned sales/saas public profiles.
+  These probes used blank credential env values and made no database calls.
+  Preparation tests: 158 passed, 19 live DB tests deselected; all 16 MCP tests passed.
+  Closure changes documentation only; tests/live checks were not repeated by Codex.
+  No Gemini was involved. MCP remains local stdio with analyst_agent access;
+  no production architecture, Agent/API/frontend/SQL, schema, or deployment changes.
 
 ## 8. Current Known Issue / Next Work
 
@@ -402,12 +418,11 @@ The production frontend/backend URLs are listed in section 1. Production
 end-to-end verification was supplied by the maintainer; final polish did not
 repeat live checks. Do not replace official scores with diagnostic rescoring.
 
-**Next planned phase: Phase 5.2 MCP client interoperability/demo**, only after
-review and explicit request. The local server is complete; third-party client
-and live database-through-MCP verification remain unperformed. Preserve the
-manual agent, prompt, eight-response
-limit, tools, profile routing, SQL protections, API, and frontend behavior unless
-the user requests a behavior change. Docker runtime verification remains optional
+**Phase 5.2 is closed:** the user's real-client/live read-only verification is
+recorded in docs/mcp.md and docs/mcp-demo.md. No next implementation phase is
+authorized; wait for an explicit user request. Preserve the manual agent, prompt,
+eight-response limit, tools, profile routing, SQL protections, API, and frontend
+behavior unless the user requests a behavior change. Docker runtime verification remains optional
 and pending. Runtime Neon URLs use restricted analyst_agent access and retain SSL
 options; deployed ALLOWED_ORIGINS should contain the exact Vercel frontend origin.
 Do not create resources, migrate databases, redeploy, call Gemini, or rerun live

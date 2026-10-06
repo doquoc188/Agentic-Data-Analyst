@@ -96,6 +96,12 @@ The launch command waits for protocol input; let the client manage the subproces
 There is no public MCP endpoint or deployment change. Client templates, profile
 settings, safety, and limitations: [docs/mcp.md](docs/mcp.md).
 
+The web application is the human-facing natural-language Agent; MCP is the
+machine-facing read-only tool interface. The user verified MCP interoperability
+with Inspector 2.9.0: both live datasets, schema/table metadata, analyst_agent in
+READ ONLY transactions, Sales count 300, SaaS subscriptions count 120, and write
+rejection. No Gemini was involved. See the [verified MCP demo](docs/mcp-demo.md).
+
 ## Safety model
 
 The project uses defense in depth:
@@ -304,7 +310,6 @@ Operational instructions: [docs/deployment.md](docs/deployment.md).
 
 Planned, not implemented:
 
-- MCP client interoperability/demo after review (local server implemented).
 - A larger schema/generalization benchmark.
 - Richer observability with an appropriate durable storage strategy.
 - Optional model-provider abstraction when justified by a real use case.
