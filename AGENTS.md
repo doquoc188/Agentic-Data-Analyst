@@ -22,8 +22,9 @@ Keep the agent core cloud-provider agnostic; preserve working production behavio
 The loop is implemented by hand to show tool binding, calls, execution, and observations.
 Do not replace it with an agent framework unless the user requests that phase.
 
-LangChain remains core and already used. MCP is planned later only as a meaningful
-interoperability layer. LangGraph remains optional; add it only when a requested
+LangChain remains core and already used. MCP provides an additional local stdio
+interoperability interface over the same read-only data tools; the web agent does
+not use MCP internally. LangGraph remains optional; add it only when a requested
 phase has a clear need, never for a technology keyword.
 
 ## 2. Current Architecture
@@ -55,6 +56,13 @@ phase has a clear need, never for a technology keyword.
   It makes no extra model or database calls; persistence errors emit safe warnings.
 - `app/tools.py`: LangChain `@tool` implementations of `calculator`,
   `get_schema`, `describe_table`, and `execute_sql`.
+- `app/mcp_server.py`: independent official-SDK stdio server exposing
+  `list_database_profiles`, `get_schema`, `describe_table`, and `execute_sql`.
+  Database tools require explicit sales/saas profile IDs, reuse resolve_profile
+  and scoped database_context, and invoke the unchanged LangChain tools.
+  MCP-native safe errors and centralized redaction exclude raw exception/input
+  details; protocol logging is disabled in the dedicated stdio process.
+  No Gemini requirement, public endpoint, or dependency from the web agent.
 - `app/database.py`: reusable Psycopg 3 `get_connection()`; loads `.env` and
   requires database settings from environment variables. An explicit database
   name/URL override or scoped ContextVar selects the destination without mutating
@@ -96,6 +104,9 @@ phase has a clear need, never for a technology keyword.
   readiness, safe profile metadata, CORS, dependency failures, secret redaction,
   and configured trace persistence, without live model/hosted-database calls.
 - `tests/test_tools.py`: calculator tests and live local PostgreSQL tool tests.
+- `tests/test_mcp_server.py`: offline SDK sessions, real stdio subprocess
+  startup/listing/shutdown, profile isolation, shared SQL-boundary/resource
+  checks with fake connections, argument validation, and secret-safety tests.
 - `tests/test_eval_cases.py`: dataset format, coverage, and live read-only
   PostgreSQL ground-truth validation. It does not call Gemini.
 - `tests/test_eval_runner.py`: offline runner and trace tests with fake agents.
@@ -105,6 +116,8 @@ phase has a clear need, never for a technology keyword.
   verifier safety/lifecycle, tracing, environment override, and optional SaaS DB
   checks enabled by `RUN_GENERALIZATION_DB_TESTS=1`.
 - `docs/tracing.md`: trace schema, storage, preview/security policy, and commands.
+- `docs/mcp.md`: local stdio tools, profile routing, safety, client placeholders,
+  offline verification, and interoperability limitations.
 - `docs/architecture.md`: request routing, manual tool loop, profile isolation,
   security boundaries, deterministic evaluation, and observability.
 - `docs/demo.md`: live-demo walkthrough and suggested Sales/SaaS questions.
@@ -130,7 +143,7 @@ phase has a clear need, never for a technology keyword.
   `/databases` supplies dataset metadata. Only VITE_API_BASE_URL is browser config.
   Vitest/React Testing Library tests mock fetch; package-lock.json pins packages.
 - `requirements.txt`: LangChain, Gemini integration, python-dotenv, Psycopg 3,
-  FastAPI, Uvicorn, and HTTPX for TestClient.
+  FastAPI, Uvicorn, HTTPX for TestClient, and official MCP SDK (supported 1.x API).
 
 Use the code and SQL files as the source of truth. `.env` stays local; settings
 are documented by name, never by secret values.
@@ -362,6 +375,13 @@ per-request environment override. Keep the primary `.env` DB_NAME unchanged.
   phase's no-DB-access constraint. npm ci and frontend production build passed.
   No application/deployment behavior, dependencies, benchmarks, or schemas changed;
   no Gemini calls, DB connections/changes, cloud changes, commits, or pushes.
+- Phase 5.1 MCP Server Integration complete: additional local stdio interface;
+  four profile-aware tools reuse existing safe configuration, context, and
+  LangChain execution. No core refactor, Agent prompt/loop, FastAPI, frontend,
+  SQL boundary, or production deployment change. Official SDK 1.30.0 verified
+  on Python 3.10.20. Offline pytest: 158 passed, 19 live DB tests deselected;
+  16 MCP tests include actual subprocess handshake/listing/shutdown.
+  No Gemini calls, live DB calls/changes, benchmark runs, deployments, or pushes.
 
 ## 8. Current Known Issue / Next Work
 
@@ -382,8 +402,10 @@ The production frontend/backend URLs are listed in section 1. Production
 end-to-end verification was supplied by the maintainer; final polish did not
 repeat live checks. Do not replace official scores with diagnostic rescoring.
 
-**Next planned phase: MCP integration**, only as a meaningful interoperability
-layer when explicitly requested. Preserve the manual agent, prompt, eight-response
+**Next planned phase: Phase 5.2 MCP client interoperability/demo**, only after
+review and explicit request. The local server is complete; third-party client
+and live database-through-MCP verification remain unperformed. Preserve the
+manual agent, prompt, eight-response
 limit, tools, profile routing, SQL protections, API, and frontend behavior unless
 the user requests a behavior change. Docker runtime verification remains optional
 and pending. Runtime Neon URLs use restricted analyst_agent access and retain SSL

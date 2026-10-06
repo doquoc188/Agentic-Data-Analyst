@@ -46,6 +46,19 @@ runs through FastAPI's worker pool. `/databases` exposes display metadata, not
 credentials. `/health` is liveness, and `/ready` validates configuration without
 contacting Gemini or PostgreSQL. They do not prove live connectivity or quota.
 
+## Additional local MCP path
+
+`app/mcp_server.py` exposes a separate stdio interface:
+MCP client -> profile resolution -> scoped database context -> the existing
+LangChain metadata/SQL tools -> PostgreSQL. Each database call selects `sales`
+or `saas`; public profile listing reveals display metadata only. The adapter
+invokes the same tools, preserving the SQL guardrails, READ ONLY transaction,
+timeout, and row cap. It requires no Gemini call or key.
+
+The web agent and FastAPI do not depend on MCP internally. The MCP server is not
+hosted on Render and adds no public endpoint or deployment configuration.
+See [mcp.md](mcp.md) for tools, safe errors, local client setup, and limitations.
+
 ## Manual agent loop
 
 1. `get_llm()` creates the Gemini chat model; `bind_tools(TOOLS)` supplies the four

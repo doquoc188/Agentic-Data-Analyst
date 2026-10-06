@@ -21,6 +21,7 @@ See the [short demo walkthrough](docs/demo.md).
 | --- | --- |
 | Agent and tools | Python, LangChain, Gemini, Psycopg 3 |
 | HTTP backend | FastAPI |
+| Local tool interoperability | Official Python MCP SDK, stdio |
 | Relational data | PostgreSQL, Neon |
 | Frontend | React, TypeScript, Vite, Tailwind CSS |
 | Hosting | Render backend, Vercel frontend |
@@ -67,6 +68,33 @@ LangChain tool loop; it does not use LangGraph.
 | `get_schema` | Discover public base tables, column names, and data types |
 | `describe_table` | Inspect columns, primary/foreign keys, defaults, and semantic comments |
 | `execute_sql` | Execute one guarded read-only analytical SELECT or supported WITH query |
+
+## MCP interface
+
+The safe analytical data layer is also available to local MCP-compatible clients:
+
+```text
+Web: Vercel -> FastAPI -> Agent -> tools -> PostgreSQL
+MCP: MCP client -> stdio MCP server -> same safe data/tool layer -> PostgreSQL
+```
+
+The web Agent does not use MCP internally. The independent server exposes
+`list_database_profiles`, `get_schema`, `describe_table`, and `execute_sql`.
+Database operations require an explicit `sales` or `saas` profile and reuse the
+existing connection context and read-only tools. MCP does not require Gemini.
+
+From the repository root, with Conda `llm` activated and requirements installed:
+
+```powershell
+python -m app.mcp_server --help
+python -m pytest -q tests/test_mcp_server.py -p no:cacheprovider
+# Configure your MCP client to launch:
+python -m app.mcp_server
+```
+
+The launch command waits for protocol input; let the client manage the subprocess.
+There is no public MCP endpoint or deployment change. Client templates, profile
+settings, safety, and limitations: [docs/mcp.md](docs/mcp.md).
 
 ## Safety model
 
@@ -148,12 +176,12 @@ verification; it is not required for the current Render deployment.
 ## Repository structure
 
 ```text
-app/                   Agent, tools, FastAPI, configuration, database, traces
+app/                   Agent, tools, FastAPI, stdio MCP, configuration, database, traces
 frontend/              React/TypeScript/Vite demo and mocked frontend tests
 tests/                 Mocked unit tests and separate PostgreSQL integration tests
 eval/                  Sales/SaaS cases, deterministic runners, offline rescoring
 sql/                   Reproducible dataset, metadata, role, and verification scripts
-docs/                  Architecture, demo, deployment, and tracing guides
+docs/                  Architecture, demo, deployment, tracing, and MCP guides
 Dockerfile             Optional backend container runtime
 .dockerignore          Strict backend build-context allowlist
 .env.example           Environment names and safe placeholders
@@ -276,7 +304,7 @@ Operational instructions: [docs/deployment.md](docs/deployment.md).
 
 Planned, not implemented:
 
-- MCP integration as a meaningful tool interoperability layer.
+- MCP client interoperability/demo after review (local server implemented).
 - A larger schema/generalization benchmark.
 - Richer observability with an appropriate durable storage strategy.
 - Optional model-provider abstraction when justified by a real use case.

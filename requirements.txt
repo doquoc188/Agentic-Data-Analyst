@@ -5,3 +5,4 @@ psycopg[binary]
 fastapi
 uvicorn
 httpx  # FastAPI TestClient
+mcp>=1.30,<2  # Official Python MCP SDK; supported 1.x API
