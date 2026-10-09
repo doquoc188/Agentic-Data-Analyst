@@ -24,3 +24,5 @@ frontend/coverage/
 .vscode/
 
 AGENTS.md
+
+.env.example
