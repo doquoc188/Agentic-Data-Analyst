@@ -22,3 +22,5 @@ frontend/coverage/
 *.backup
 
 .vscode/
+
+AGENTS.md
