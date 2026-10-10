@@ -26,3 +26,5 @@ frontend/coverage/
 AGENTS.md
 
 .env.example
+
+data/olist_raw/
