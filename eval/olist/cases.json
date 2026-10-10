@@ -1,0 +1,442 @@
+[
+  {
+    "id": "olist_average_review_score",
+    "question": "What is the average review score across all review rows? Round to two decimal places.",
+    "difficulty": "easy",
+    "category": "reviews",
+    "requires": ["aggregation", "average"],
+    "reference_sql": "SELECT ROUND(AVG(review_score), 2) AS average_review_score FROM public.reviews",
+    "expected_columns": ["average_review_score"],
+    "expected_result": 4.09,
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "scalar",
+      "column_matching": "strict",
+      "row_order": "strict",
+      "numeric_tolerance": 0.01,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "olist_orders_missing_delivery_timestamp",
+    "question": "How many orders do not have a recorded actual customer delivery timestamp?",
+    "difficulty": "easy",
+    "category": "delivery",
+    "requires": ["count", "null_filter"],
+    "reference_sql": "SELECT COUNT(*) AS orders_without_delivery_timestamp FROM public.orders WHERE delivered_customer_date IS NULL",
+    "expected_columns": ["orders_without_delivery_timestamp"],
+    "expected_result": 2965,
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "scalar",
+      "column_matching": "strict",
+      "row_order": "strict",
+      "numeric_tolerance": 0,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "olist_review_comment_percentage",
+    "question": "What percentage of all review rows contain a review comment message that is not NULL and is not empty after trimming surrounding whitespace? Round to two decimal places.",
+    "difficulty": "easy",
+    "category": "reviews",
+    "requires": ["aggregation", "percentage", "null_filter"],
+    "reference_sql": "SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE review_comment_message IS NOT NULL AND BTRIM(review_comment_message) <> '') / COUNT(*), 2) AS review_comment_percentage FROM public.reviews",
+    "expected_columns": ["review_comment_percentage"],
+    "expected_result": 41.29,
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "scalar",
+      "column_matching": "strict",
+      "row_order": "strict",
+      "numeric_tolerance": 0.01,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "olist_max_payment_installments",
+    "question": "What is the largest number of installments recorded on a single payment row?",
+    "difficulty": "easy",
+    "category": "payments",
+    "requires": ["aggregation", "maximum"],
+    "reference_sql": "SELECT MAX(payment_installments) AS maximum_installments FROM public.payments",
+    "expected_columns": ["maximum_installments"],
+    "expected_result": 24,
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "scalar",
+      "column_matching": "strict",
+      "row_order": "strict",
+      "numeric_tolerance": 0,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "olist_orders_by_purchase_month",
+    "question": "How many orders were purchased in each observed calendar month? Return months chronologically as YYYY-MM.",
+    "difficulty": "medium",
+    "category": "temporal",
+    "requires": ["temporal", "group_by", "count", "sorting"],
+    "reference_sql": "SELECT TO_CHAR(DATE_TRUNC('month', purchase_timestamp), 'YYYY-MM') AS purchase_month, COUNT(*) AS order_count FROM public.orders GROUP BY DATE_TRUNC('month', purchase_timestamp) ORDER BY DATE_TRUNC('month', purchase_timestamp)",
+    "expected_columns": ["purchase_month", "order_count"],
+    "expected_result": {
+      "columns": ["purchase_month", "order_count"],
+      "rows": [
+        ["2016-09", 4], ["2016-10", 324], ["2016-12", 1],
+        ["2017-01", 800], ["2017-02", 1780], ["2017-03", 2682],
+        ["2017-04", 2404], ["2017-05", 3700], ["2017-06", 3245],
+        ["2017-07", 4026], ["2017-08", 4331], ["2017-09", 4285],
+        ["2017-10", 4631], ["2017-11", 7544], ["2017-12", 5673],
+        ["2018-01", 7269], ["2018-02", 6728], ["2018-03", 7211],
+        ["2018-04", 6939], ["2018-05", 6873], ["2018-06", 6167],
+        ["2018-07", 6292], ["2018-08", 6512], ["2018-09", 16],
+        ["2018-10", 4]
+      ]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "strict",
+      "required_columns": ["purchase_month", "order_count"],
+      "numeric_tolerance": 0,
+      "time_granularity": "month"
+    }
+  },
+  {
+    "id": "olist_late_delivery_percentage",
+    "question": "Among orders with status delivered and a recorded actual customer delivery timestamp, what percentage arrived after the estimated delivery timestamp? Round to two decimal places.",
+    "difficulty": "medium",
+    "category": "delivery",
+    "requires": ["filter", "aggregation", "percentage", "temporal"],
+    "reference_sql": "SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE delivered_customer_date > estimated_delivery_date) / COUNT(*), 2) AS late_delivery_percentage FROM public.orders WHERE status = 'delivered' AND delivered_customer_date IS NOT NULL",
+    "expected_columns": ["late_delivery_percentage"],
+    "expected_result": 8.11,
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "scalar",
+      "column_matching": "strict",
+      "row_order": "strict",
+      "numeric_tolerance": 0.01,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "olist_top_states_by_unique_customers",
+    "question": "Which five customer states have the most distinct customers? Treat the same person across different orders as one customer. Return the distinct counts and break ties by state code alphabetically.",
+    "difficulty": "medium",
+    "category": "customers",
+    "requires": ["semantic_comments", "distinct", "group_by", "sorting", "top_k"],
+    "reference_sql": "SELECT state, COUNT(DISTINCT customer_unique_id) AS unique_customers FROM public.customers GROUP BY state ORDER BY unique_customers DESC, state ASC LIMIT 5",
+    "expected_columns": ["state", "unique_customers"],
+    "expected_result": {
+      "columns": ["state", "unique_customers"],
+      "rows": [["SP", 40302], ["RJ", 12384], ["MG", 11259], ["RS", 5277], ["PR", 4882]]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "strict",
+      "row_match": "prefix",
+      "required_columns": ["state", "unique_customers"],
+      "numeric_tolerance": 0,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "olist_multi_payment_order_count",
+    "question": "How many orders have more than one payment row recorded?",
+    "difficulty": "medium",
+    "category": "payments",
+    "requires": ["group_by", "having", "count", "payment_rows", "multi_step"],
+    "reference_sql": "SELECT COUNT(*) AS orders_with_multiple_payment_rows FROM (SELECT order_id FROM public.payments GROUP BY order_id HAVING COUNT(*) > 1) AS multi_payment_orders",
+    "expected_columns": ["orders_with_multiple_payment_rows"],
+    "expected_result": 2961,
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "scalar",
+      "column_matching": "strict",
+      "row_order": "strict",
+      "numeric_tolerance": 0,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "olist_top_categories_by_average_freight",
+    "question": "Among English-translated product categories represented by at least 100 order-item rows, which five have the highest average freight amount per item row? Round averages to two decimal places and break ties by category alphabetically.",
+    "difficulty": "medium",
+    "category": "products",
+    "requires": ["join", "join_3", "filter", "group_by", "having", "average", "sorting", "top_k", "freight"],
+    "reference_sql": "SELECT t.category_name_english AS category, COUNT(*) AS item_rows, ROUND(AVG(oi.freight_value), 2) AS average_freight FROM public.order_items AS oi JOIN public.products AS p ON p.product_id = oi.product_id JOIN public.category_translation AS t ON t.category_name = p.category_name GROUP BY t.category_name_english HAVING COUNT(*) >= 100 ORDER BY average_freight DESC, t.category_name_english ASC LIMIT 5",
+    "expected_columns": ["category", "item_rows", "average_freight"],
+    "expected_result": {
+      "columns": ["category", "item_rows", "average_freight"],
+      "rows": [
+        ["computers", 203, 48.45],
+        ["home_appliances_2", 238, 44.54],
+        ["kitchen_dining_laundry_garden_furniture", 281, 42.7],
+        ["furniture_bedroom", 109, 42.5],
+        ["office_furniture", 1691, 40.55]
+      ]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "strict",
+      "row_match": "prefix",
+      "required_columns": ["category", "item_rows", "average_freight"],
+      "numeric_tolerance": 0.01,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "olist_review_score_by_order_status",
+    "question": "For each order status that has at least one associated review row, what are the number of review rows and the average review score across those review rows? Round averages to two decimal places and return statuses alphabetically.",
+    "difficulty": "medium",
+    "category": "reviews",
+    "requires": ["join", "group_by", "count", "average", "sorting", "review_rows"],
+    "reference_sql": "SELECT o.status, COUNT(*) AS review_rows, ROUND(AVG(r.review_score), 2) AS average_review_score FROM public.orders AS o JOIN public.reviews AS r ON r.order_id = o.order_id GROUP BY o.status ORDER BY o.status ASC",
+    "expected_columns": ["status", "review_rows", "average_review_score"],
+    "expected_result": {
+      "columns": ["status", "review_rows", "average_review_score"],
+      "rows": [
+        ["approved", 2, 2.5], ["canceled", 609, 1.81], ["created", 3, 2.33],
+        ["delivered", 96361, 4.16], ["invoiced", 313, 1.66],
+        ["processing", 296, 1.28], ["shipped", 1043, 2.01],
+        ["unavailable", 597, 1.53]
+      ]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "strict",
+      "required_columns": ["status", "review_rows", "average_review_score"],
+      "numeric_tolerance": 0.01,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "olist_top_seller_states_by_delivered_orders",
+    "question": "Which five seller states supplied items on the most distinct delivered orders? Return the distinct order counts and break ties by state code alphabetically.",
+    "difficulty": "medium",
+    "category": "sellers",
+    "requires": ["join", "join_3", "filter", "distinct", "group_by", "sorting", "top_k"],
+    "reference_sql": "SELECT s.state, COUNT(DISTINCT oi.order_id) AS delivered_orders FROM public.sellers AS s JOIN public.order_items AS oi ON oi.seller_id = s.seller_id JOIN public.orders AS o ON o.order_id = oi.order_id WHERE o.status = 'delivered' GROUP BY s.state ORDER BY delivered_orders DESC, s.state ASC LIMIT 5",
+    "expected_columns": ["state", "delivered_orders"],
+    "expected_result": {
+      "columns": ["state", "delivered_orders"],
+      "rows": [["SP", 68641], ["MG", 7735], ["PR", 7512], ["RJ", 4227], ["SC", 3603]]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "strict",
+      "row_match": "prefix",
+      "required_columns": ["state", "delivered_orders"],
+      "numeric_tolerance": 0,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "olist_credit_card_multi_installment_percentage",
+    "question": "Among payment rows recorded as credit card, what percentage use more than one installment? Round to two decimal places.",
+    "difficulty": "medium",
+    "category": "payments",
+    "requires": ["filter", "aggregation", "percentage", "categorical_grounding"],
+    "reference_sql": "SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE payment_installments > 1) / COUNT(*), 2) AS multi_installment_percentage FROM public.payments WHERE payment_type = 'credit_card'",
+    "expected_columns": ["multi_installment_percentage"],
+    "expected_result": 66.85,
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "scalar",
+      "column_matching": "strict",
+      "row_order": "strict",
+      "numeric_tolerance": 0.01,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "olist_state_late_delivery_rates",
+    "question": "Among customer states with at least 1,000 orders whose status is delivered and whose actual customer delivery timestamp is recorded, which five have the highest late-delivery percentage? Define a late delivery as an actual customer delivery timestamp after the estimated delivery timestamp, and calculate the percentage over those delivered orders with recorded actual timestamps in each state. Return that denominator count and the percentage rounded to two decimal places; break ties by state code alphabetically.",
+    "difficulty": "hard",
+    "category": "delivery",
+    "requires": ["join", "filter", "group_by", "having", "percentage", "sorting", "top_k", "temporal"],
+    "reference_sql": "WITH state_delivery AS (SELECT c.state, COUNT(*) AS eligible_orders, COUNT(*) FILTER (WHERE o.delivered_customer_date > o.estimated_delivery_date) AS late_orders FROM public.orders AS o JOIN public.customers AS c ON c.customer_id = o.customer_id WHERE o.status = 'delivered' AND o.delivered_customer_date IS NOT NULL GROUP BY c.state) SELECT state, eligible_orders, ROUND(100.0 * late_orders / eligible_orders, 2) AS late_delivery_percentage FROM state_delivery WHERE eligible_orders >= 1000 ORDER BY late_delivery_percentage DESC, state ASC LIMIT 5",
+    "expected_columns": ["state", "eligible_orders", "late_delivery_percentage"],
+    "expected_result": {
+      "columns": ["state", "eligible_orders", "late_delivery_percentage"],
+      "rows": [["CE", 1279, 15.32], ["BA", 3256, 14.04], ["RJ", 12350, 13.47], ["ES", 1995, 12.23], ["PE", 1593, 10.8]]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "strict",
+      "row_match": "prefix",
+      "required_columns": ["state", "eligible_orders", "late_delivery_percentage"],
+      "numeric_tolerance": 0.01,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "olist_top_categories_by_review_score",
+    "question": "Among English-translated categories appearing in at least 100 distinct reviewed orders, which five have the highest average review score across associated review rows? Associate every review row for an order with each category represented on that order. Return distinct reviewed-order counts and averages rounded to two decimal places; break ties by reviewed-order count descending, then category alphabetically.",
+    "difficulty": "hard",
+    "category": "reviews",
+    "requires": ["join", "join_4", "distinct", "group_by", "having", "average", "sorting", "top_k", "review_rows", "multi_step"],
+    "reference_sql": "WITH order_categories AS (SELECT DISTINCT oi.order_id, t.category_name_english AS category FROM public.order_items AS oi JOIN public.products AS p ON p.product_id = oi.product_id JOIN public.category_translation AS t ON t.category_name = p.category_name), category_reviews AS (SELECT oc.category, r.order_id, r.review_id, r.review_score FROM order_categories AS oc JOIN public.reviews AS r ON r.order_id = oc.order_id) SELECT category, COUNT(DISTINCT order_id) AS reviewed_orders, ROUND(AVG(review_score), 2) AS average_review_score FROM category_reviews GROUP BY category HAVING COUNT(DISTINCT order_id) >= 100 ORDER BY average_review_score DESC, reviewed_orders DESC, category ASC LIMIT 5",
+    "expected_columns": ["category", "reviewed_orders", "average_review_score"],
+    "expected_result": {
+      "columns": ["category", "reviewed_orders", "average_review_score"],
+      "rows": [["books_general_interest", 508, 4.46], ["books_technical", 257, 4.41], ["food_drink", 226, 4.39], ["luggage_accessories", 1030, 4.33], ["food", 445, 4.28]]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "strict",
+      "row_match": "prefix",
+      "required_columns": ["category", "reviewed_orders", "average_review_score"],
+      "numeric_tolerance": 0.01,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "olist_top_sellers_by_category_diversity",
+    "question": "Which five sellers supplied delivered-order items across the widest number of distinct English-translated product categories? Return the translated-category count and the number of distinct delivered orders represented by those translated-category items; break ties by that delivered-order count descending, then seller ID alphabetically.",
+    "difficulty": "hard",
+    "category": "sellers",
+    "requires": ["join", "join_5", "filter", "distinct", "group_by", "sorting", "top_k", "category_diversity"],
+    "reference_sql": "SELECT s.seller_id, COUNT(DISTINCT t.category_name_english) AS category_count, COUNT(DISTINCT oi.order_id) AS delivered_orders FROM public.sellers AS s JOIN public.order_items AS oi ON oi.seller_id = s.seller_id JOIN public.orders AS o ON o.order_id = oi.order_id JOIN public.products AS p ON p.product_id = oi.product_id JOIN public.category_translation AS t ON t.category_name = p.category_name WHERE o.status = 'delivered' GROUP BY s.seller_id ORDER BY category_count DESC, delivered_orders DESC, s.seller_id ASC LIMIT 5",
+    "expected_columns": ["seller_id", "category_count", "delivered_orders"],
+    "expected_result": {
+      "columns": ["seller_id", "category_count", "delivered_orders"],
+      "rows": [
+        ["b2ba3715d723d245138f291a6fe42594", 27, 324],
+        ["955fee9216a65b617aa5c0531780ce60", 23, 1261],
+        ["4e922959ae960d389249c378d1c939f5", 23, 397],
+        ["1da3aeb70d7989d1e6d9b0e887f97c23", 21, 261],
+        ["f8db351d8c4c4c22c6835c19a46f01b0", 19, 657]
+      ]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "strict",
+      "row_match": "prefix",
+      "required_columns": ["seller_id", "category_count", "delivered_orders"],
+      "numeric_tolerance": 0,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "olist_customers_across_multiple_states",
+    "question": "How many stable customers have orders associated with more than one customer state? Treat the same person across different orders as one customer.",
+    "difficulty": "hard",
+    "category": "customers",
+    "requires": ["semantic_comments", "customer_identity", "distinct", "group_by", "having", "count", "multi_step"],
+    "reference_sql": "SELECT COUNT(*) AS customers_with_multiple_states FROM (SELECT customer_unique_id FROM public.customers GROUP BY customer_unique_id HAVING COUNT(DISTINCT state) > 1) AS multi_state_customers",
+    "expected_columns": ["customers_with_multiple_states"],
+    "expected_result": 39,
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "scalar",
+      "column_matching": "strict",
+      "row_order": "strict",
+      "numeric_tolerance": 0,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "olist_month_highest_average_delivery_variance",
+    "question": "Among purchase months with at least 100 orders whose status is delivered and whose actual customer delivery timestamp is recorded, which month had the highest average signed elapsed days, including fractional days, between actual customer delivery and estimated delivery? Calculate actual minus estimated, so positive values mean late and negative values mean early. Return the number of delivered orders with recorded actual timestamps used for that month, round the average to two decimal places, and choose the earliest month if tied.",
+    "difficulty": "hard",
+    "category": "temporal",
+    "requires": ["temporal", "filter", "group_by", "average", "date_difference", "sorting", "top_k"],
+    "reference_sql": "SELECT TO_CHAR(DATE_TRUNC('month', purchase_timestamp), 'YYYY-MM') AS purchase_month, COUNT(*) AS eligible_orders, ROUND(AVG(EXTRACT(EPOCH FROM (delivered_customer_date - estimated_delivery_date)) / 86400.0), 2) AS average_days_from_estimate FROM public.orders WHERE status = 'delivered' AND delivered_customer_date IS NOT NULL GROUP BY DATE_TRUNC('month', purchase_timestamp) HAVING COUNT(*) >= 100 ORDER BY average_days_from_estimate DESC, DATE_TRUNC('month', purchase_timestamp) ASC LIMIT 1",
+    "expected_columns": ["purchase_month", "eligible_orders", "average_days_from_estimate"],
+    "expected_result": {
+      "columns": ["purchase_month", "eligible_orders", "average_days_from_estimate"],
+      "rows": [["2018-03", 7003, -5.73]]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "strict",
+      "row_match": "prefix",
+      "required_columns": ["purchase_month", "eligible_orders", "average_days_from_estimate"],
+      "numeric_tolerance": 0.01,
+      "time_granularity": "month"
+    }
+  },
+  {
+    "id": "olist_delivered_payment_item_total_mismatches",
+    "question": "Among delivered orders that have both recorded payment rows and order-item rows, how many have total recorded payments differing by more than 0.01 from total item price plus freight? Aggregate all payment rows and all item rows separately per order before comparing.",
+    "difficulty": "hard",
+    "category": "payments",
+    "requires": ["join", "join_3", "filter", "sum", "group_by", "payment_rows", "freight", "multi_step"],
+    "reference_sql": "WITH item_totals AS (SELECT order_id, SUM(price + freight_value) AS item_and_freight_total FROM public.order_items GROUP BY order_id), payment_totals AS (SELECT order_id, SUM(payment_value) AS payment_total FROM public.payments GROUP BY order_id) SELECT COUNT(*) AS mismatched_delivered_orders FROM public.orders AS o JOIN item_totals AS i ON i.order_id = o.order_id JOIN payment_totals AS p ON p.order_id = o.order_id WHERE o.status = 'delivered' AND ABS(p.payment_total - i.item_and_freight_total) > 0.01",
+    "expected_columns": ["mismatched_delivered_orders"],
+    "expected_result": 299,
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "scalar",
+      "column_matching": "strict",
+      "row_order": "strict",
+      "numeric_tolerance": 0,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "olist_top_categories_by_freight_ratio",
+    "question": "Among English-translated categories with at least 100 order-item rows and a nonzero total item price, which five have the largest total freight as a percentage of total item price? Treat item price as excluding freight, round percentages to two decimal places, and break ties by category alphabetically.",
+    "difficulty": "hard",
+    "category": "products",
+    "requires": ["join", "join_3", "group_by", "having", "sum", "percentage", "freight", "sorting", "top_k"],
+    "reference_sql": "SELECT t.category_name_english AS category, COUNT(*) AS item_rows, ROUND(100.0 * SUM(oi.freight_value) / NULLIF(SUM(oi.price), 0), 2) AS freight_percentage_of_item_price FROM public.order_items AS oi JOIN public.products AS p ON p.product_id = oi.product_id JOIN public.category_translation AS t ON t.category_name = p.category_name GROUP BY t.category_name_english HAVING COUNT(*) >= 100 AND SUM(oi.price) <> 0 ORDER BY freight_percentage_of_item_price DESC, t.category_name_english ASC LIMIT 5",
+    "expected_columns": ["category", "item_rows", "freight_percentage_of_item_price"],
+    "expected_result": {
+      "columns": ["category", "item_rows", "freight_percentage_of_item_price"],
+      "rows": [["christmas_supplies", 153, 36.69], ["signaling_and_security", 199, 30.26], ["food_drink", 278, 29.7], ["electronics", 2767, 29.07], ["furniture_living_room", 503, 26.07]]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "strict",
+      "row_match": "prefix",
+      "required_columns": ["category", "item_rows", "freight_percentage_of_item_price"],
+      "numeric_tolerance": 0.01,
+      "time_granularity": null
+    }
+  },
+  {
+    "id": "olist_largest_monthly_delivered_order_increase",
+    "question": "Which observed purchase month had the largest increase in delivered-order count compared with the immediately previous observed purchase month? Return the month, its delivered-order count, and the increase; choose the earliest month if tied.",
+    "difficulty": "hard",
+    "category": "temporal",
+    "requires": ["temporal", "filter", "group_by", "count", "window", "sorting", "top_k", "multi_step"],
+    "reference_sql": "WITH monthly AS (SELECT DATE_TRUNC('month', purchase_timestamp) AS purchase_month, COUNT(*) AS delivered_orders FROM public.orders WHERE status = 'delivered' GROUP BY DATE_TRUNC('month', purchase_timestamp)), changes AS (SELECT purchase_month, delivered_orders, delivered_orders - LAG(delivered_orders) OVER (ORDER BY purchase_month) AS order_increase FROM monthly) SELECT TO_CHAR(purchase_month, 'YYYY-MM') AS purchase_month, delivered_orders, order_increase FROM changes WHERE order_increase IS NOT NULL ORDER BY order_increase DESC, purchase_month ASC LIMIT 1",
+    "expected_columns": ["purchase_month", "delivered_orders", "order_increase"],
+    "expected_result": {
+      "columns": ["purchase_month", "delivered_orders", "order_increase"],
+      "rows": [["2017-11", 7289, 2811]]
+    },
+    "ground_truth_verified": true,
+    "comparison": {
+      "result_type": "table",
+      "column_matching": "position",
+      "row_order": "strict",
+      "row_match": "prefix",
+      "required_columns": ["purchase_month", "delivered_orders", "order_increase"],
+      "numeric_tolerance": 0,
+      "time_granularity": "month"
+    }
+  }
+]

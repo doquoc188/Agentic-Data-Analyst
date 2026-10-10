@@ -5,6 +5,7 @@ __pycache__/
 .pytest_cache/
 eval/results/*.json
 eval/generalization/results/*.json
+eval/olist/results/*.json
 runs/
 
 # Frontend builds, dependencies, local configuration, and portable build tools

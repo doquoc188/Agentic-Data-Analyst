@@ -45,6 +45,52 @@ listed by `GET /databases`, not available in the production frontend or MCP,
 not hosted on Neon, and has no official Agent benchmark score. Existing Sales
 22/24 (91.67%) and unseen SaaS 14/16 (87.50%) scores are unchanged.
 
+### Phase 6.2A — frozen Olist benchmark
+
+The official Olist benchmark is frozen at exactly 20 new questions: 4 easy,
+8 medium, and 8 hard. It covers reviews, delivery performance, payments,
+customers, sellers, products/categories, temporal analysis, aggregation, and
+joins through five tables. Reference SQL is evaluator-only, read-only, and uses
+explicit filters, ordering, and tie rules. Expected results were generated
+directly from the local PostgreSQL fixture as `analyst_agent` in read-only
+transactions.
+
+The following six manual development questions are excluded from the official
+benchmark, including trivial paraphrases:
+
+- "How many orders are in the dataset?"
+- "Which order status occurs most often?"
+- "Which payment type is used most often?"
+- "Which product category generated the most item revenue?"
+- "Which seller generated the highest item revenue?"
+- "How many unique customers placed more than one order?"
+
+Scoring reuses the existing deterministic evaluator and produces one pass/fail
+result per case. There is no LLM judge. Phase 6.2A does not run Gemini or the
+Agent benchmark, so no official Olist Agent score exists yet. The historical
+Sales 22/24 (91.67%) and unseen SaaS 14/16 (87.50%) results are unchanged.
+
+Verify the stored reference results directly against local PostgreSQL:
+
+```powershell
+conda activate llm
+python -m eval.olist.verify
+```
+
+The focused database test is opt-in and also makes no Gemini calls:
+
+```powershell
+$env:RUN_OLIST_BENCHMARK_DB_TESTS = "1"
+try {
+  python -m pytest -q tests/test_olist_benchmark.py -p no:cacheprovider
+} finally {
+  Remove-Item Env:RUN_OLIST_BENCHMARK_DB_TESTS
+}
+```
+
+The future baseline entry point is `python -m eval.olist_runner`. That command
+calls Gemini and must remain user-triggered; it was not run during Phase 6.2A.
+
 ## Imported data
 
 Eight CSV datasets are imported into `public`:
