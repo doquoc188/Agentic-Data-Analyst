@@ -14,6 +14,21 @@ from sql.olist.import_olist import (
 
 
 SPECS = {spec.table: spec for spec in TABLE_IMPORTS}
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+
+PRICE_COMMENT = (
+    "Item price excluding freight_value. The source metadata does not explicitly "
+    "declare a currency unit; consumers must not infer or display a currency symbol."
+)
+FREIGHT_COMMENT = (
+    "Freight or shipping amount for this item. The source metadata does not explicitly "
+    "declare a currency unit; consumers must not infer or display a currency symbol."
+)
+PAYMENT_COMMENT = (
+    "Amount for one payment row. An order can have multiple payment rows; sum "
+    "payment_value by order_id for total payment amount. The source metadata does not "
+    "explicitly declare a currency unit; consumers must not infer or display a currency symbol."
+)
 
 
 class OlistImportTests(unittest.TestCase):
@@ -132,6 +147,19 @@ class OlistImportTests(unittest.TestCase):
              "order_approved_at", "order_delivered_carrier_date",
              "order_delivered_customer_date", "order_estimated_delivery_date"],
         )
+
+    def test_monetary_comments_are_consistent_and_forbid_currency_inference(self):
+        sql_paths = (
+            REPOSITORY_ROOT / "sql" / "olist" / "01_create_schema.sql",
+            REPOSITORY_ROOT / "sql" / "olist" / "04_monetary_metadata.sql",
+            REPOSITORY_ROOT / "sql" / "olist" / "02_verify.sql",
+        )
+        for path in sql_paths:
+            sql = path.read_text(encoding="utf-8")
+            with self.subTest(path=path.name):
+                self.assertIn(PRICE_COMMENT, sql)
+                self.assertIn(FREIGHT_COMMENT, sql)
+                self.assertIn(PAYMENT_COMMENT, sql)
 
 
 if __name__ == "__main__":

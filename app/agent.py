@@ -7,6 +7,7 @@ from langchain.messages import HumanMessage, SystemMessage, ToolMessage
 from pydantic import ValidationError
 
 from app.database import DatabaseUnavailableError, database_context
+from app.grounding import guard_final_answer
 from app.llm import get_llm
 from app.trace import AgentTrace, ToolCallRecord, elapsed_ms, safe_trace_value, utc_now
 from app.tools import calculator, describe_table, execute_sql, get_schema
@@ -24,6 +25,10 @@ Never invent database tables, columns, or query results.
 For an unfamiliar database question, inspect the schema with get_schema.
 Use describe_table only for necessary details such as relationships or business units;
 do not automatically describe every table. Follow trusted column descriptions.
+Do not infer or invent units, currencies, percentages, labels, or other measurement semantics unless explicitly supported by the user input, database metadata/comments, or tool results.
+If answering correctly requires knowing the semantic meaning, unit, currency, identity semantics, aggregation semantics, or interpretation of database columns, and that information is not already supported by the user input, schema already seen, database comments already seen, or tool results, call describe_table for the relevant table or tables before giving the final answer.
+If that metadata still does not specify a unit or currency, report the numeric value without inventing a symbol or unit.
+Preserve categorical and database labels exactly as returned by tools unless the user explicitly asks for reformatting or database metadata or tool output explicitly provides an alternate display label.
 Exact stored categorical/text filter values are database semantics; do not assume capitalization, spelling, or codes.
 When a literal's stored representation is unknown, prefer trusted describe_table metadata that defines allowed values.
 Otherwise, when necessary, use a small bounded read-only SELECT DISTINCT query with ORDER BY and LIMIT 10.
@@ -182,6 +187,7 @@ def _run_agent(
                       f"\nYou have at most {max_iterations} model responses, including the final answer."),
         HumanMessage(content=question),
     ]
+    tool_evidence = []
 
     for turn in range(1, max_iterations + 1):
         turn_event, turn_started = trace.start_turn(turn)
@@ -199,7 +205,7 @@ def _run_agent(
         messages.append(response)
 
         if not response.tool_calls:
-            final_answer = response.text
+            final_answer = guard_final_answer(question, tool_evidence, response.text)
             if trace is not None:
                 trace.final_answer = safe_trace_value(final_answer)
             if verbose:
@@ -258,6 +264,7 @@ def _run_agent(
                     ) from None
 
             event.result = safe_trace_value(str(result))
+            tool_evidence.append(str(result))
             if event.status == "pending":
                 event.status = "success"
             if selected_tool is None:

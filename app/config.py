@@ -19,6 +19,7 @@ class Settings:
     google_api_key: str = field(default="", repr=False)
     database_sales_url: str = field(default="", repr=False)
     database_saas_url: str = field(default="", repr=False)
+    database_olist_url: str = field(default="", repr=False)
     db_host: str = field(default="", repr=False)
     db_port: str = field(default="", repr=False)
     db_name: str = field(default="", repr=False)
@@ -57,6 +58,7 @@ def get_settings(*, load_environment: bool = True) -> Settings:
         google_api_key=text("GOOGLE_API_KEY", ""),
         database_sales_url=text("DATABASE_SALES_URL", ""),
         database_saas_url=text("DATABASE_SAAS_URL", ""),
+        database_olist_url=text("DATABASE_OLIST_URL", ""),
         db_host=text("DB_HOST", ""), db_port=text("DB_PORT", ""),
         db_name=text("DB_NAME", ""), db_user=text("DB_USER", ""),
         db_password=text("DB_PASSWORD", ""), allowed_origins=origins,
@@ -79,9 +81,9 @@ def secret_values() -> list[str]:
     """Known secrets for redaction, even when other configuration is invalid."""
     values = [os.environ.get(name, "") for name in (
         "DB_PASSWORD", "GOOGLE_API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY",
-        "DATABASE_SALES_URL", "DATABASE_SAAS_URL",
+        "DATABASE_SALES_URL", "DATABASE_SAAS_URL", "DATABASE_OLIST_URL",
     )]
-    for name in ("DATABASE_SALES_URL", "DATABASE_SAAS_URL"):
+    for name in ("DATABASE_SALES_URL", "DATABASE_SAAS_URL", "DATABASE_OLIST_URL"):
         url = os.environ.get(name, "")
         if url:
             try:

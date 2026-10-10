@@ -131,6 +131,33 @@ BEGIN
         RAISE EXCEPTION 'Required semantic comments are missing.';
     END IF;
 
+    IF (SELECT col_description(c.oid, a.attnum)
+        FROM pg_catalog.pg_class AS c
+        JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+        JOIN pg_catalog.pg_attribute AS a ON a.attrelid = c.oid
+        WHERE n.nspname = 'public' AND c.relname = 'order_items'
+          AND a.attname = 'price' AND a.attnum > 0 AND NOT a.attisdropped)
+       IS DISTINCT FROM
+          'Item price excluding freight_value. The source metadata does not explicitly declare a currency unit; consumers must not infer or display a currency symbol.'
+       OR (SELECT col_description(c.oid, a.attnum)
+           FROM pg_catalog.pg_class AS c
+           JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+           JOIN pg_catalog.pg_attribute AS a ON a.attrelid = c.oid
+           WHERE n.nspname = 'public' AND c.relname = 'order_items'
+             AND a.attname = 'freight_value' AND a.attnum > 0 AND NOT a.attisdropped)
+          IS DISTINCT FROM
+             'Freight or shipping amount for this item. The source metadata does not explicitly declare a currency unit; consumers must not infer or display a currency symbol.'
+       OR (SELECT col_description(c.oid, a.attnum)
+           FROM pg_catalog.pg_class AS c
+           JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+           JOIN pg_catalog.pg_attribute AS a ON a.attrelid = c.oid
+           WHERE n.nspname = 'public' AND c.relname = 'payments'
+             AND a.attname = 'payment_value' AND a.attnum > 0 AND NOT a.attisdropped)
+          IS DISTINCT FROM
+             'Amount for one payment row. An order can have multiple payment rows; sum payment_value by order_id for total payment amount. The source metadata does not explicitly declare a currency unit; consumers must not infer or display a currency symbol.' THEN
+        RAISE EXCEPTION 'Monetary semantic comments are missing or outdated.';
+    END IF;
+
     IF (SELECT COUNT(*) FROM public.reviews WHERE review_comment_title IS NULL) <> 87656
        OR (SELECT COUNT(*) FROM public.reviews WHERE review_comment_message IS NULL) <> 58247
        OR (SELECT COUNT(*) FROM public.orders WHERE approved_at IS NULL) <> 160

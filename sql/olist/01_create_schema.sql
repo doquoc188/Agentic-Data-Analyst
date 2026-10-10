@@ -127,11 +127,11 @@ COMMENT ON COLUMN public.orders.purchase_timestamp IS
 COMMENT ON COLUMN public.orders.delivered_customer_date IS
     'Actual delivery timestamp. NULL when delivery was not recorded.';
 COMMENT ON COLUMN public.order_items.price IS
-    'Item price excluding freight_value.';
+    'Item price excluding freight_value. The source metadata does not explicitly declare a currency unit; consumers must not infer or display a currency symbol.';
 COMMENT ON COLUMN public.order_items.freight_value IS
-    'Freight or shipping amount for this item.';
+    'Freight or shipping amount for this item. The source metadata does not explicitly declare a currency unit; consumers must not infer or display a currency symbol.';
 COMMENT ON COLUMN public.payments.payment_value IS
-    'Payment amount for one payment record. An order can have multiple payment rows; sum payment_value by order_id for total payment amount.';
+    'Amount for one payment row. An order can have multiple payment rows; sum payment_value by order_id for total payment amount. The source metadata does not explicitly declare a currency unit; consumers must not infer or display a currency symbol.';
 COMMENT ON COLUMN public.reviews.review_score IS
     'Customer review score from 1 to 5, where 5 is best.';
 COMMENT ON COLUMN public.products.category_name IS

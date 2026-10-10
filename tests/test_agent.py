@@ -72,6 +72,54 @@ class AgentTests(unittest.TestCase):
         for case in load_cases():
             self.assertNotIn(case["id"], SYSTEM_INSTRUCTIONS)
 
+    def test_measurement_semantics_instruction_is_generic(self):
+        existing_instruction = (
+            "Do not infer or invent units, currencies, percentages, labels, or other "
+            "measurement semantics unless explicitly supported by the user input, "
+            "database metadata/comments, or tool results."
+        )
+        escalation_instructions = (
+            "If answering correctly requires knowing the semantic meaning, unit, currency, "
+            "identity semantics, aggregation semantics, or interpretation of database "
+            "columns, and that information is not already supported by the user input, "
+            "schema already seen, database comments already seen, or tool results, call "
+            "describe_table for the relevant table or tables before giving the final answer.\n"
+            "If that metadata still does not specify a unit or currency, report the numeric "
+            "value without inventing a symbol or unit.\n"
+            "Preserve categorical and database labels exactly as returned by tools unless "
+            "the user explicitly asks for reformatting or database metadata or tool output "
+            "explicitly provides an alternate display label."
+        )
+        self.assertIn(existing_instruction, SYSTEM_INSTRUCTIONS)
+        self.assertIn(escalation_instructions, SYSTEM_INSTRUCTIONS)
+        prompt = SYSTEM_INSTRUCTIONS.casefold()
+        for dataset_specific_term in (
+            "olist", "brl", "usd", "health_beauty", "order_items",
+        ):
+            self.assertNotIn(dataset_specific_term, prompt)
+
+    def test_final_answer_uses_accumulated_tool_evidence_guard(self):
+        fake_llm = FakeLlm([
+            tool_request(
+                "execute_sql",
+                {"query": "SELECT category, total FROM category_totals LIMIT 1"},
+                "result",
+            ),
+            AIMessage(
+                content="**category_alpha** (Category Alpha) leads with $1,250.00."
+            ),
+        ])
+        result = (
+            "COLUMNS:\ncategory | total\n\nROWS:\n"
+            "category_alpha | 1250.00\n\nRows returned: 1"
+        )
+        trace = AgentTrace()
+        with patch("app.agent.get_llm", return_value=fake_llm), \
+             patch.object(execute_sql, "func", return_value=result):
+            answer = run_agent("Which category leads?", trace=trace, verbose=False)
+        self.assertEqual(answer, "**category_alpha** leads with 1,250.00.")
+        self.assertEqual(trace.final_answer, answer)
+
     def test_verified_empty_observation_can_lead_directly_to_an_answer(self):
         fake_llm = FakeLlm([
             tool_request("execute_sql", {"query": "SELECT id FROM example WHERE active"}, "empty"),
