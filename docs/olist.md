@@ -42,18 +42,19 @@ The local profile has this safe display metadata:
 
 Olist remains local only. It is not selectable through the deployed API, not
 listed by `GET /databases`, not available in the production frontend or MCP,
-not hosted on Neon, and has no official Agent benchmark score. Existing Sales
-22/24 (91.67%) and unseen SaaS 14/16 (87.50%) scores are unchanged.
+and not hosted on Neon. Its first official local Agent baseline is recorded
+under Phase 6.2B/6.2C below. Existing Sales 22/24 (91.67%) and unseen SaaS
+14/16 (87.50%) scores are unchanged.
 
 ### Phase 6.2A — frozen Olist benchmark
 
-The official Olist benchmark is frozen at exactly 20 new questions: 4 easy,
-8 medium, and 8 hard. It covers reviews, delivery performance, payments,
-customers, sellers, products/categories, temporal analysis, aggregation, and
-joins through five tables. Reference SQL is evaluator-only, read-only, and uses
-explicit filters, ordering, and tie rules. Expected results were generated
-directly from the local PostgreSQL fixture as `analyst_agent` in read-only
-transactions.
+The official Olist benchmark is frozen at commit `4fca654` with exactly 20 new
+questions: 4 easy, 8 medium, and 8 hard. It covers reviews, delivery performance,
+payments, customers, sellers, products/categories, temporal analysis,
+aggregation, and joins through five tables. Reference SQL is evaluator-only,
+read-only, and uses explicit filters, ordering, and tie rules. Expected results
+were generated directly from the local PostgreSQL fixture as `analyst_agent` in
+read-only transactions.
 
 The following six manual development questions are excluded from the official
 benchmark, including trivial paraphrases:
@@ -66,9 +67,54 @@ benchmark, including trivial paraphrases:
 - "How many unique customers placed more than one order?"
 
 Scoring reuses the existing deterministic evaluator and produces one pass/fail
-result per case. There is no LLM judge. Phase 6.2A does not run Gemini or the
-Agent benchmark, so no official Olist Agent score exists yet. The historical
-Sales 22/24 (91.67%) and unseen SaaS 14/16 (87.50%) results are unchanged.
+result per case. There is no LLM judge.
+
+### Phase 6.2B/6.2C — official baseline and documentation freeze
+
+Attempt #1 was invalid as an analytical run: all 20 cases failed with
+`ConnectError` during the first model invocation, before Agent execution. It is
+preserved as infrastructure evidence and is not treated as an analytical score.
+
+Attempt #2 reached normal Agent execution for every case and is the first valid
+official Olist analytical baseline:
+
+- **Official Olist baseline: 14/20 (70.00%)**
+- Easy: **3/4 (75.00%)**
+- Medium: **6/8 (75.00%)**
+- Hard: **5/8 (62.50%)**
+
+The six recorded failures comprise four evaluator/result-shape mismatches and
+two genuine analytical aggregation failures. In these evaluator mismatch cases,
+the Agent stated the correct requested business values, but the frozen evaluator
+rejected extra supporting columns or the returned result shape:
+
+- `olist_review_comment_percentage`
+- `olist_late_delivery_percentage`
+- `olist_credit_card_multi_installment_percentage`
+- `olist_top_categories_by_freight_ratio`
+
+The genuine analytical failures were:
+
+- `olist_top_categories_by_review_score`: review-score averages were weighted
+  incorrectly because raw order-item joins duplicated review rows;
+  order-category relationships needed deduplication before averaging.
+- `olist_delivered_payment_item_total_mismatches`: payment rows and item rows
+  were joined before independent per-order aggregation, causing many-to-many
+  multiplication.
+
+The diagnostic business-answer correctness is **18/20**. This is explicitly
+**non-official and diagnostic only**; it does not replace the official frozen
+score of **14/20**.
+
+The ignored attempt #2 artifact is preserved locally at
+`eval/olist/results/attempt-002-first-valid-baseline.json` with SHA-256:
+
+```text
+810FBAC54BE4978F3EAC2B14EE19B456D97C815A7CF65E6BF2DB85A2092F308B
+```
+
+Historical official scores now remain Sales **22/24 (91.67%)**, unseen SaaS
+**14/16 (87.50%)**, and Olist **14/20 (70.00%)**.
 
 Verify the stored reference results directly against local PostgreSQL:
 
@@ -88,8 +134,9 @@ try {
 }
 ```
 
-The future baseline entry point is `python -m eval.olist_runner`. That command
-calls Gemini and must remain user-triggered; it was not run during Phase 6.2A.
+The live entry point is `python -m eval.olist_runner`. It calls Gemini and must
+remain explicitly user-triggered; documentation and offline test runs do not
+invoke it.
 
 ## Imported data
 
