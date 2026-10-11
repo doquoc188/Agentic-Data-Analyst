@@ -162,14 +162,44 @@ The ignored artifact is preserved locally at
 1A8D9DEA342D73C6192E44EFBBD1736808956815F1EA518FBDE01C92A6DD601B
 ```
 
-Historical results remain clearly separated:
+### Phase 6.4 — final evaluation decision
 
-| Evaluation | Result |
-| --- | ---: |
-| Sales | 22/24 (91.67%) |
-| SaaS unseen | 14/16 (87.50%) |
-| Olist unseen baseline | 14/20 (70.00%) |
-| Olist post-tuning #1 | 17/20 (85.00%) |
+The Phase 6.4A final-refinement experiment produced post-tuning evaluation #2
+at **16/20 (80.00%)**. It corrected `olist_late_delivery_percentage`, but did
+not correct `olist_top_categories_by_freight_ratio` or
+`olist_top_categories_by_review_score`. One previously passing case failed
+after a provider `RESOURCE_EXHAUSTED` response. In another previously passing
+case, the Agent retrieved and stated the correct answer, but later unnecessary
+exploration caused the frozen SQL-selection heuristic to select a broader
+result. The recorded score consequently fell below post-tuning evaluation #1.
+
+Phase 6.4A was reverted. The retained Phase 6.3A configuration is the final
+selection because post-tuning evaluation #1 remains the highest deterministic
+result at **17/20 (85.00%)**. It improved by **3 cases** and **15 percentage
+points** over the unseen baseline, preserved every one of the 14
+baseline-passing cases, and the final refinement did not demonstrate enough
+measured benefit to keep.
+
+The final result history remains clearly separated:
+
+| Evaluation | Result | Status |
+| --- | ---: | --- |
+| Sales | 22/24 (91.67%) | Historical official score |
+| SaaS unseen | 14/16 (87.50%) | Historical official score |
+| Olist unseen baseline | 14/20 (70.00%) | Official frozen unseen baseline |
+| Olist post-tuning #1 | 17/20 (85.00%) | Best retained result; Phase 6.3A |
+| Olist post-tuning #2 | 16/20 (80.00%) | Rejected Phase 6.4A experiment |
+
+The corresponding result files remain local, ignored artifacts and are not
+tracked:
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `eval/olist/results/attempt-002-first-valid-baseline.json` | `810FBAC54BE4978F3EAC2B14EE19B456D97C815A7CF65E6BF2DB85A2092F308B` |
+| `eval/olist/results/post-tuning-001.json` | `1A8D9DEA342D73C6192E44EFBBD1736808956815F1EA518FBDE01C92A6DD601B` |
+| `eval/olist/results/post-tuning-002.json` | `4108622ACDE16CDF37F4A0E4F4E985AC7670A84406A09AAFDAF1E6B3C19D85A2` |
+
+No further prompt tuning will be performed against this frozen benchmark.
 
 Verify the stored reference results directly against local PostgreSQL:
 

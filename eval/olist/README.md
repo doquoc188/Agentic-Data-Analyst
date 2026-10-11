@@ -120,11 +120,40 @@ Its SHA-256 is:
 1A8D9DEA342D73C6192E44EFBBD1736808956815F1EA518FBDE01C92A6DD601B
 ```
 
-Historical results remain distinct:
+## Final evaluation decision
 
-| Evaluation | Result |
-| --- | ---: |
-| Sales | 22/24 (91.67%) |
-| SaaS unseen | 14/16 (87.50%) |
-| Olist unseen baseline | 14/20 (70.00%) |
-| Olist post-tuning #1 | 17/20 (85.00%) |
+The Phase 6.4A final-refinement experiment recorded post-tuning evaluation #2
+at **16/20 (80.00%)**. It corrected `olist_late_delivery_percentage`, but it did
+not correct `olist_top_categories_by_freight_ratio` or
+`olist_top_categories_by_review_score`. One previously passing case ended after
+a provider `RESOURCE_EXHAUSTED` failure. Another previously passing case
+retrieved and stated the correct result, but later unnecessary exploration led
+the frozen SQL-selection heuristic to choose a broader result. The recorded
+score therefore fell below post-tuning evaluation #1.
+
+Phase 6.4A was reverted. The retained Phase 6.3A configuration produced
+post-tuning evaluation #1, the highest deterministic Olist score at
+**17/20 (85.00%)**. It improved on the unseen baseline by **3 cases** and
+**15 percentage points**, with no regressions among the 14 baseline-passing
+cases. The final refinement experiment did not provide enough measured benefit
+to retain.
+
+The final result history is:
+
+| Evaluation | Result | Status |
+| --- | ---: | --- |
+| Sales | 22/24 (91.67%) | Historical official score |
+| SaaS unseen | 14/16 (87.50%) | Historical official score |
+| Olist unseen baseline | 14/20 (70.00%) | Official frozen unseen baseline |
+| Olist post-tuning #1 | 17/20 (85.00%) | Best retained result; Phase 6.3A |
+| Olist post-tuning #2 | 16/20 (80.00%) | Rejected Phase 6.4A experiment |
+
+The ignored local artifacts are preserved without being tracked:
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `results/attempt-002-first-valid-baseline.json` | `810FBAC54BE4978F3EAC2B14EE19B456D97C815A7CF65E6BF2DB85A2092F308B` |
+| `results/post-tuning-001.json` | `1A8D9DEA342D73C6192E44EFBBD1736808956815F1EA518FBDE01C92A6DD601B` |
+| `results/post-tuning-002.json` | `4108622ACDE16CDF37F4A0E4F4E985AC7670A84406A09AAFDAF1E6B3C19D85A2` |
+
+No further prompt tuning will be performed against this frozen benchmark.
