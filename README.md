@@ -17,8 +17,9 @@ Both production datasets have been verified end-to-end by the maintainer.
 The backend root is not the demo page; use the frontend to ask questions.
 See the [short demo walkthrough](docs/demo.md).
 
-**v1.0.0 released.** See the [release notes](docs/release-notes-v1.0.0.md)
-and [release checklist](docs/release-checklist.md).
+**Release v1.1.0 is being prepared:** Real-World Olist Evaluation. See the
+[v1.1.0 release notes](docs/release-notes-v1.1.0.md). The current tagged release
+remains **v1.0.0**; its [release notes](docs/release-notes-v1.0.0.md) are preserved.
 
 **Sales: 22/24 = 91.67% · SaaS unseen: 14/16 = 87.50%.**
 **Local Olist evaluation:** unseen baseline **14/20 = 70.00%**; best retained
