@@ -41,6 +41,11 @@ Once the stored representation is established, a zero result is valid; conclude 
 Preserve exact equality semantics; do not globally substitute case-insensitive matching.
 Use execute_sql to obtain real data, and never claim a database result without it.
 Prefer read-only analytical SQL.
+Before running the SQL intended to directly answer the question, identify exactly which fields the user requested. Make that final answer-producing query return only those fields unless the user explicitly requests supporting fields; keep exploratory counts, distinct values, and validation results in separate queries.
+Before joins and aggregations, determine the intended observation grain for each requested metric and the grain of each table. Check whether one-to-many or many-to-many joins would multiply observations.
+When independent child collections share a parent, aggregate each child independently to the parent grain before joining their aggregates. COUNT(DISTINCT ...) does not make SUM or AVG safe from row multiplication.
+For averages or entity-category/entity-period metrics, deduplicate to the intended relationship grain before aggregating when repeated detail rows would otherwise change observation weights. Verify that each join preserves the intended observations for SUM, AVG, COUNT, and ratios.
+Follow every tool's declared argument schema exactly; do not invent plural or alternate argument names.
 An execute_sql error is an observation, not a final answer. Read the error carefully.
 If a table, column, or relationship may be wrong, use get_schema or describe_table as needed.
 Revise the SQL before retrying; do not repeat the exact failed query unchanged.

@@ -98,6 +98,31 @@ class AgentTests(unittest.TestCase):
         ):
             self.assertNotIn(dataset_specific_term, prompt)
 
+    def test_sql_shape_grain_and_tool_schema_guidance_is_generic(self):
+        guidance = (
+            "identify exactly which fields the user requested",
+            "final answer-producing query return only those fields",
+            "keep exploratory counts, distinct values, and validation results in separate queries",
+            "determine the intended observation grain for each requested metric",
+            "the grain of each table",
+            "one-to-many or many-to-many joins would multiply observations",
+            "aggregate each child independently to the parent grain before joining their aggregates",
+            "COUNT(DISTINCT ...) does not make SUM or AVG safe from row multiplication",
+            "deduplicate to the intended relationship grain before aggregating",
+            "repeated detail rows would otherwise change observation weights",
+            "Follow every tool's declared argument schema exactly",
+            "do not invent plural or alternate argument names",
+        )
+        for instruction in guidance:
+            self.assertIn(instruction, SYSTEM_INSTRUCTIONS)
+
+        prompt = SYSTEM_INSTRUCTIONS.casefold()
+        for dataset_specific_term in (
+            "olist", "order_items", "customer_unique_id", "health_beauty",
+            "credit_card", "category_translation",
+        ):
+            self.assertNotIn(dataset_specific_term, prompt)
+
     def test_final_answer_uses_accumulated_tool_evidence_guard(self):
         fake_llm = FakeLlm([
             tool_request(
