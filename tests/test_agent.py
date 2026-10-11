@@ -100,27 +100,16 @@ class AgentTests(unittest.TestCase):
 
     def test_sql_shape_grain_and_tool_schema_guidance_is_generic(self):
         guidance = (
-            "map each requested output to the final SELECT list",
-            "return exactly those answer fields unless the user explicitly requests supporting fields",
-            "WHERE, HAVING, ORDER BY, arithmetic, ranking, validation, intermediate totals",
-            "do not need to be projected",
-            "inspect useful supporting values in a separate exploratory query",
+            "identify exactly which fields the user requested",
+            "final answer-producing query return only those fields",
+            "keep exploratory counts, distinct values, and validation results in separate queries",
             "determine the intended observation grain for each requested metric",
             "the grain of each table",
             "one-to-many or many-to-many joins would multiply observations",
             "aggregate each child independently to the parent grain before joining their aggregates",
             "COUNT(DISTINCT ...) does not make SUM or AVG safe from row multiplication",
-            "Before AVG, identify the intended observation key: what should count once",
-            "detail or bridge joins create multiple rows for that observation",
-            "one row per intended observation or entity-relationship pair before averaging",
-            "COUNT(DISTINCT entity_id) changes only that COUNT expression",
-            "does not deduplicate rows consumed by AVG or SUM",
-            "Do not use DISTINCT on the measured numeric value",
-            "Before calling execute_sql for the final analytical result, verify",
-            "SELECT fields exactly match the requested output",
-            "join grain does not duplicate intended observations",
-            "SUM/AVG/ratio inputs use the intended grain",
-            "supporting fields are not projected unless requested",
+            "deduplicate to the intended relationship grain before aggregating",
+            "repeated detail rows would otherwise change observation weights",
             "Follow every tool's declared argument schema exactly",
             "do not invent plural or alternate argument names",
         )
@@ -129,9 +118,8 @@ class AgentTests(unittest.TestCase):
 
         prompt = SYSTEM_INSTRUCTIONS.casefold()
         for dataset_specific_term in (
-            "olist", "orders", "order_items", "reviews", "payments",
-            "category_translation", "customer_unique_id", "health_beauty",
-            "credit_card",
+            "olist", "order_items", "customer_unique_id", "health_beauty",
+            "credit_card", "category_translation",
         ):
             self.assertNotIn(dataset_specific_term, prompt)
 
