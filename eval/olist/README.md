@@ -75,3 +75,56 @@ The ignored attempt #2 artifact is preserved locally as
 Raw result artifacts and linked traces remain Git ignored. The historical
 scores remain Sales **22/24 (91.67%)**, unseen SaaS **14/16 (87.50%)**, and the
 official Olist baseline **14/20 (70.00%)**.
+
+## Post-tuning evaluation #1
+
+Phase 6.3 added generic SQL result-shape and aggregation-grain guidance without
+changing this frozen benchmark or its evaluator. The first post-baseline run
+recorded **17/20 (85.00%)**: easy **4/4**, medium **7/8**, and hard **6/8**.
+Compared with the official unseen baseline, this is an improvement of **3 cases**
+and **15 percentage points**. It is a tuned evaluation and must not be described
+as an unseen score; the official unseen Olist baseline remains **14/20 (70.00%)**.
+
+All 14 baseline-passing cases remained passing. Three baseline failures were
+corrected:
+
+- `olist_review_comment_percentage`: the final SQL returned only the requested
+  percentage.
+- `olist_credit_card_multi_installment_percentage`: categorical exploration was
+  kept separate from the final scalar query.
+- `olist_delivered_payment_item_total_mismatches`: payment and item child rows
+  were independently aggregated to order grain before their aggregates were
+  joined.
+
+Three cases remained failed:
+
+- `olist_late_delivery_percentage`: the business value was correct, but the
+  query still returned extra supporting columns that the frozen scalar contract
+  rejected.
+- `olist_top_categories_by_freight_ratio`: the requested values were correct,
+  but extra total-price and total-freight columns caused another frozen
+  result-shape rejection.
+- `olist_top_categories_by_review_score`: raw detail joins still duplicated
+  review observations before averaging. `COUNT(DISTINCT order_id)` corrected the
+  count but did not correct the weighting of `AVG`.
+
+Execution produced 20/20 final answers, 76 model responses, 56 tool calls, and
+29 SQL attempts. One SQL execution error was recovered inside the existing
+manual loop; there were no provider failures and no benchmark or case reruns.
+The benchmark fixture, expected results, and evaluator remained unchanged.
+
+The ignored artifact is preserved locally as `results/post-tuning-001.json`.
+Its SHA-256 is:
+
+```text
+1A8D9DEA342D73C6192E44EFBBD1736808956815F1EA518FBDE01C92A6DD601B
+```
+
+Historical results remain distinct:
+
+| Evaluation | Result |
+| --- | ---: |
+| Sales | 22/24 (91.67%) |
+| SaaS unseen | 14/16 (87.50%) |
+| Olist unseen baseline | 14/20 (70.00%) |
+| Olist post-tuning #1 | 17/20 (85.00%) |

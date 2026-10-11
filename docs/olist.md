@@ -43,8 +43,9 @@ The local profile has this safe display metadata:
 Olist remains local only. It is not selectable through the deployed API, not
 listed by `GET /databases`, not available in the production frontend or MCP,
 and not hosted on Neon. Its first official local Agent baseline is recorded
-under Phase 6.2B/6.2C below. Existing Sales 22/24 (91.67%) and unseen SaaS
-14/16 (87.50%) scores are unchanged.
+under Phase 6.2B/6.2C below, followed by the first tuned evaluation under Phase
+6.3. Existing Sales 22/24 (91.67%) and unseen SaaS 14/16 (87.50%) scores are
+unchanged.
 
 ### Phase 6.2A — frozen Olist benchmark
 
@@ -115,6 +116,60 @@ The ignored attempt #2 artifact is preserved locally at
 
 Historical official scores now remain Sales **22/24 (91.67%)**, unseen SaaS
 **14/16 (87.50%)**, and Olist **14/20 (70.00%)**.
+
+### Phase 6.3 — generic reasoning tuning and post-tuning evaluation #1
+
+Phase 6.3 added dataset-independent guidance for final result shape, exploratory
+versus final SQL, analytical grain, independent child pre-aggregation,
+deduplication before averaging, and exact tool argument schemas. The benchmark,
+evaluator, expected results, tools, database, model, and SQL safety remained
+unchanged.
+
+Post-tuning evaluation #1 recorded **17/20 (85.00%)**: easy **4/4**, medium
+**7/8**, and hard **6/8**. This improves on the official unseen baseline by
+**3 cases** and **15 percentage points**. It is a tuned evaluation, not an unseen
+score. The official unseen Olist baseline remains permanently **14/20 (70.00%)**.
+
+All 14 baseline-passing cases remained passing. Three previous failures were
+corrected:
+
+- `olist_review_comment_percentage`: the final query returned only the requested
+  percentage.
+- `olist_credit_card_multi_installment_percentage`: exploratory categorical
+  lookup was separated from the final scalar query.
+- `olist_delivered_payment_item_total_mismatches`: payment and item child
+  collections were independently aggregated to order grain before joining.
+
+Three cases remained failed:
+
+- `olist_late_delivery_percentage`: the correct business value was returned with
+  extra supporting columns, so the frozen evaluator rejected its shape.
+- `olist_top_categories_by_freight_ratio`: the requested values were correct,
+  but extra total-price and total-freight columns caused a frozen result-shape
+  rejection.
+- `olist_top_categories_by_review_score`: raw order-item joins still duplicated
+  review observations before averaging; `COUNT(DISTINCT order_id)` corrected the
+  count but not `AVG` weighting.
+
+The run produced 20/20 final answers, 76 model responses, 56 tool calls, and 29
+SQL attempts. One SQL execution error was recovered inside the existing manual
+loop. There were zero provider failures and no benchmark or case reruns.
+
+The ignored artifact is preserved locally at
+`eval/olist/results/post-tuning-001.json` with SHA-256:
+
+```text
+1A8D9DEA342D73C6192E44EFBBD1736808956815F1EA518FBDE01C92A6DD601B
+```
+
+Historical results remain clearly separated:
+
+| Evaluation | Result |
+| --- | ---: |
+| Sales | 22/24 (91.67%) |
+| SaaS unseen | 14/16 (87.50%) |
+| Olist unseen baseline | 14/20 (70.00%) |
+| Olist post-tuning #1 | 17/20 (85.00%) |
 
 Verify the stored reference results directly against local PostgreSQL:
 
