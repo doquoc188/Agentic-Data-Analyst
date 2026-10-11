@@ -21,6 +21,11 @@ See the [short demo walkthrough](docs/demo.md).
 and [release checklist](docs/release-checklist.md).
 
 **Sales: 22/24 = 91.67% · SaaS unseen: 14/16 = 87.50%.**
+**Local Olist evaluation:** unseen baseline **14/20 = 70.00%**; best retained
+post-tuning result **17/20 = 85.00%** (**+3 cases / +15 percentage points**).
+
+Beyond the deployed synthetic Sales/SaaS demo, the same Agent was evaluated
+locally on the real-world Olist e-commerce dataset.
 
 [AI capabilities](#core-capabilities) · [Architecture](#architecture) · [AI Engineering Stack](#ai-engineering-stack) ·
 [Tools](#agent-tools) · [SQL safety](#safety-model) · [Evaluation](#evaluation) · [Local setup](#local-development)
@@ -60,10 +65,13 @@ it at full size; these examples do not replace the official benchmark scores.
 - PK/FK, default, nullability, and PostgreSQL semantic-comment inspection.
 - Read-only analytical SQL generation and SQL-error self-correction.
 - Grounding unknown categorical filter values in metadata or bounded value queries.
+- Evidence-grounded final-answer cleanup for unsupported units, labels, and display text.
+- Generic SQL result-shape and analytical-grain guidance across relational schemas.
 - Bounded execution with a statement timeout and result row cap.
 - Isolated Sales/SaaS database profile selection per request.
+- Local real-world schema evaluation on Olist using the same Agent and tools.
 - Structured local traces, timing, safe errors, and bounded result previews.
-- Deterministic database-result evaluation and a second-schema generalization suite.
+- Frozen deterministic Sales, unseen SaaS, and pre/post-tuning Olist evaluations.
 
 <a id="architecture"></a>
 
@@ -84,6 +92,13 @@ Vercel hosts the frontend; Render runs the source-based Python backend; Neon
 hosts separate Sales and SaaS databases. Each request selects one allowlisted
 profile. Docker is retained for consistent backend packaging and optional local
 verification; it is not required for the current Render deployment.
+
+Olist is a separate local evaluation path and is not connected to Vercel,
+Render, Neon, the public FastAPI profile list, or the production frontend:
+
+```text
+Local evaluation: question -> same manual Agent and tools -> local PostgreSQL Olist
+```
 
 ```text
 Web: Vercel frontend -> FastAPI -> manual LangChain Agent -> safe tools -> PostgreSQL
@@ -143,7 +158,7 @@ access, error correction, evaluation, and serving the agent through an API.
 | PostgreSQL Schema Discovery | `get_schema` discovers public base tables; `describe_table` supplies columns, PK/FK relationships, defaults, and semantic comments |
 | SQL Generation & Safe Execution | Gemini generates analytical SQL; `execute_sql` validates and executes it under read-only protections |
 | Python Arithmetic Tool | `calculator` performs explicit add/subtract/multiply/divide operations; no general Python execution or dataframe analysis tool is exposed |
-| Database Profile Routing | `resolve_profile()` and scoped database context isolate the selected Sales/SaaS destination per run |
+| Database Profile Routing | `resolve_profile()` and scoped database context isolate public Sales/SaaS destinations and the separate local-only Olist evaluation profile |
 | Tool Observations | Metadata and SQL column/row text return through matching ToolMessages; database result text is not a typed row API |
 
 ### AI Safety & Guardrails
@@ -177,13 +192,15 @@ choose the necessary tools. SQL text checks are guardrails, not a complete parse
 | Neon | Separate hosted synthetic Sales and SaaS PostgreSQL databases |
 | Sales Profile | Retail tables and normalized customers/products/orders/order_items; original sales retained |
 | SaaS Profile | Accounts, plans, subscriptions, invoices, and support tickets; a second schema for generalization |
-| Dynamic Routing | Only `sales`/`saas` are public selections; hosted URLs override local fallback privately, without per-request environment mutation |
+| Olist Local Evaluation | Real-world anonymized public e-commerce data: eight relational tables and 550,759 imported rows in local PostgreSQL only |
+| Dynamic Routing | Only `sales`/`saas` are public selections; Olist remains local-only, and connection selection never uses per-request environment mutation |
 
 ### Evaluation & Observability
 
 | Component | Purpose |
 | --- | --- |
-| Deterministic Evaluation | Separate 24-case Sales and 16-case SaaS suites; question-only agent input and evaluator-only PostgreSQL reference results |
+| Deterministic Evaluation | Separate 24-case Sales, 16-case unseen SaaS, and 20-case frozen Olist suites; question-only Agent input and evaluator-only PostgreSQL references |
+| Benchmark Discipline | Frozen cases and expected results, deterministic pass/fail, no LLM judge or manual score overrides, and explicit pre/post-tuning result separation |
 | Supporting SQL Selection | Ground-truth-free heuristic selects successful SQL for read-only re-execution and explicit result comparison |
 | Structured Local Tracing | Model turns, tool/SQL calls, IDs, status, timing, final answers, and bounded redacted previews in Git-ignored `runs/` |
 | Error Classification | Separates model integration, argument validation, SQL rejection/execution, tool runtime, database, and response-limit failures |
@@ -219,8 +236,8 @@ and database access run on the backend.
 | AI Tools | Schema discovery, metadata inspection, read-only SQL, Python calculator |
 | Guardrails | SELECT/WITH restrictions, READ ONLY, analyst_agent, time/row/response limits |
 | Backend | Python, FastAPI, Pydantic |
-| Data | PostgreSQL, Psycopg 3, Neon; Sales/SaaS profiles |
-| Evaluation / Observability | Deterministic reference-result evaluation, structured local traces, safe failure classification |
+| Data | PostgreSQL, Psycopg 3, Neon-hosted Sales/SaaS, and local-only Olist |
+| Evaluation / Observability | Frozen deterministic reference-result evaluation, pre/post-tuning measurement, structured local traces, safe failure classification |
 | AI Interface | Independent MCP / local stdio |
 | Deployment | Render, Neon, Vercel; optional Docker packaging |
 | Client / UI | React, TypeScript, Vite, Tailwind CSS |
@@ -326,32 +343,67 @@ answer, and sufficient successful evidence should lead to a conclusion.
 
 ## Evaluation & Observability
 
-| Dataset | Cases | Passed | Accuracy |
-| --- | ---: | ---: | ---: |
-| Sales | 24 | 22 | **91.67%** |
-| SaaS unseen | 16 | 14 | **87.50%** |
+| Dataset / evaluation | Cases | Passed | Accuracy | Status |
+| --- | ---: | ---: | ---: | --- |
+| Sales | 24 | 22 | **91.67%** | Existing synthetic benchmark |
+| SaaS unseen | 16 | 14 | **87.50%** | Unseen synthetic schema |
+| Olist unseen baseline | 20 | 14 | **70.00%** | Frozen real-world baseline |
+| Olist post-tuning #1 | 20 | 17 | **85.00%** | Best retained post-tuning result |
 
-Recorded live results on two synthetic fixtures, scored deterministically against
-PostgreSQL reference results. These are limited benchmark scores, not a guarantee
-for every live answer.
+These are three separate evaluation stories and are not combined into one
+accuracy figure. Sales is the existing benchmark, SaaS measures an unseen
+synthetic schema, and Olist adds a frozen real-world local benchmark. The Olist
+**17/20** result is post-tuning and is not an unseen score.
 
-The official recorded baselines above are unchanged.
-
-Evaluation is deterministic, not an LLM judge. The agent receives only each
+Evaluation is deterministic, not an LLM judge. The Agent receives only each
 natural-language question; reference SQL and expected results stay evaluator-only.
 Reference results were verified against PostgreSQL. The runner selects supporting
-SQL from the agent trace, re-executes it read-only, and compares structured results
+SQL from the Agent trace, re-executes it read-only, and compares structured results
 using explicit contracts for requested fields, ordering, numeric tolerance, and
-other declared representation rules.
+other declared representation rules. Scores are never manually overridden.
 
-These are limited synthetic-data benchmarks. Known failures include model/provider
-interruptions and convergence or result-representation issues. Diagnostic rescoring
-is not a new live benchmark and does not replace the official numbers above.
-No 100% accuracy or universal text-to-SQL reliability is claimed.
+These are limited benchmarks, not guarantees for every live answer. Known
+failures include model/provider interruptions, SQL reasoning misses, convergence,
+and result-representation or selection issues. Diagnostic rescoring is not a new
+live benchmark and does not replace an official baseline. No 100% accuracy or
+universal text-to-SQL reliability is claimed.
 
 Details: [Sales evaluation](eval/README.md) ·
 [SaaS evaluation](eval/generalization/README.md) ·
+[Olist evaluation](eval/olist/README.md) ·
 [Architecture and evaluation path](docs/architecture.md#evaluation-and-observability).
+
+## Real-World Olist Evaluation
+
+The local extension uses the
+[Brazilian E-Commerce Public Dataset by Olist](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce),
+an anonymized public dataset rather than customer production data. Its raw CSV
+files remain local and Git ignored. The importer loads **550,759 rows** into
+eight PostgreSQL tables with primary keys, foreign keys, indexes, and semantic
+comments.
+
+Olist uses the same generic manual Agent loop and the existing `get_schema`,
+`describe_table`, and `execute_sql` tools. Runtime Agent logic contains no
+Olist table names, SQL templates, or business rules. Local access uses the
+restricted `analyst_agent` role, SELECT-only grants, and READ ONLY transactions.
+
+The 20 benchmark cases were frozen before the first valid analytical run:
+
+- 4 easy, 8 medium, and 8 hard cases.
+- Reference SQL remains evaluator-only.
+- Expected results come directly from PostgreSQL.
+- Scoring is deterministic pass/fail, with no LLM judge or manual overrides.
+
+The official unseen baseline was **14/20 (70.00%)**. Generic SQL reasoning
+guidance improved the best retained post-tuning result to **17/20 (85.00%)**,
+an increase of **3 cases and 15 percentage points**, while all 14
+baseline-passing cases remained passing. A later refinement experiment scored
+**16/20 (80.00%)** and was reverted under the predefined decision rule.
+
+Olist remains **local only**. It is not hosted on Neon, exposed by the public
+FastAPI profile list or MCP, selectable in the production frontend, or part of
+the deployed Sales/SaaS demo. See the [Olist setup and evidence](docs/olist.md)
+and [frozen benchmark documentation](eval/olist/README.md).
 
 ### Structured local traces
 
@@ -392,24 +444,30 @@ No sessions, conversational persistence, or streaming are implemented.
 
 ## Database Profiles
 
-The same core manual agent loop and four tools were evaluated across two distinct
-PostgreSQL schemas, using runtime discovery rather than a separate SaaS agent:
+The same core manual Agent loop and generic tools were evaluated across three
+distinct PostgreSQL schemas through runtime discovery:
 
-| Dataset | Tables |
-| --- | --- |
-| Sales | `customers`, `products`, `orders`, `order_items`, `sales` |
-| SaaS | `accounts`, `plans`, `subscriptions`, `invoices`, `support_tickets` |
+| Dataset | Tables | Scope |
+| --- | --- | --- |
+| Sales | `customers`, `products`, `orders`, `order_items`, `sales` | Public demo and local development |
+| SaaS | `accounts`, `plans`, `subscriptions`, `invoices`, `support_tickets` | Public demo and unseen-schema evaluation |
+| Olist | Eight relational e-commerce tables | Local real-world evaluation only |
 
-The SaaS suite was introduced as an unseen second database. Relationships and
-business units come from real PK/FK constraints and PostgreSQL comments; the
-profile configuration selects a connection destination, not a schema-specific
-SQL template. This demonstrates generalization across these two fixtures, not
-reliability on every future database.
+The SaaS suite was introduced as an unseen second database. Olist later tested
+the same Agent and tools against a larger real-world relational dataset.
+Relationships and business units come from PK/FK constraints and PostgreSQL
+comments; profile configuration selects a connection destination, not a
+schema-specific SQL template. This is evidence across these measured datasets,
+not a claim of reliability on every future database.
 
 Server-side [app/profiles.py](app/profiles.py) maps `sales` to local
 `agentic_analyst` and `saas` to `agentic_analyst_saas`. In production, separate
 Neon URLs override those local targets. Context resets after the run; clients
 cannot supply arbitrary hosts, URLs, or credentials.
+
+The separate `olist` profile is available only to local Agent/evaluation code.
+It is excluded from public API and MCP allowlists and has no production-hosted
+database destination.
 
 <a id="deployment-overview"></a>
 
@@ -433,9 +491,9 @@ Operational instructions: [docs/deployment.md](docs/deployment.md).
 app/                   Agent, tools, FastAPI, stdio MCP, configuration, database, traces
 frontend/              React/TypeScript/Vite demo and mocked frontend tests
 tests/                 Mocked unit tests and separate PostgreSQL integration tests
-eval/                  Sales/SaaS cases, deterministic runners, offline rescoring
-sql/                   Reproducible dataset, metadata, role, and verification scripts
-docs/                  Architecture, demo, deployment, tracing, MCP, and release guides
+eval/                  Sales/SaaS/Olist cases, deterministic runners, offline rescoring
+sql/                   Reproducible synthetic and local Olist data/verification scripts
+docs/                  Architecture, demo, deployment, tracing, MCP, Olist, and release guides
 Dockerfile             Optional backend container runtime
 .dockerignore          Strict backend build-context allowlist
 .env.example           Environment names and safe placeholders
@@ -547,9 +605,12 @@ retain their existing local configuration unless explicitly scoped otherwise.
 - Temperature 0 does not make external LLM behavior fully deterministic.
 - Provider failures and rate limits can interrupt a run; there are no automatic provider retries.
 - Render Free instances may cold start after inactivity ([service lifecycle](https://render.com/docs/free)).
-- Benchmarks cover only the synthetic Sales/SaaS datasets; arbitrary production-schema accuracy is not guaranteed.
+- The production demo still uses only synthetic Sales/SaaS fixtures.
+- Olist is real-world public data but remains local-only and is not production-hosted.
+- The Sales, SaaS, and Olist benchmark sets are limited in size; arbitrary production-schema accuracy is not guaranteed.
 - The agent can reach its eight-response limit before finalizing an answer.
 - Evaluation SQL selection and representation contracts have known limitations.
+- MCP remains a local stdio interface and is not a public endpoint.
 - No write operations, authentication, sessions, streaming, or arbitrary database connections are supported.
 - Production tracing has no durable storage; readiness checks configuration, not connectivity or provider quota.
 - Docker files are implemented, but local image/runtime verification is still pending from the unavailable Docker engine.
